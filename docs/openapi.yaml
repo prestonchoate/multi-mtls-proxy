@@ -1,0 +1,351 @@
+openapi: 3.0.3
+info:
+  title: mTLS Proxy API
+  description: API for managing mutual TLS authentication proxy configurations
+  version: 1.0.0
+servers:
+  - url: 'http://localhost:8080'
+    description: Default Admin API Server
+
+paths:
+  /admin/apps:
+    post:
+      summary: Create a new app
+      description: Creates a new application configuration with client certificates
+      operationId: createApp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAppRequest'
+      responses:
+        '201':
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateAppResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: App ID already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      summary: Get all apps
+      description: Retrieves all configured applications
+      operationId: getAllApps
+      responses:
+        '200':
+          description: List of applications
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: '#/components/schemas/AppConfig'
+
+  /admin/apps/{appId}:
+    get:
+      summary: Get app details
+      description: Retrieves a specific application configuration
+      operationId: getApp
+      parameters:
+        - name: appId
+          in: path
+          description: ID of the app to retrieve
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Application details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppConfig'
+        '404':
+          description: App not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete an app
+      description: Deletes an application configuration and its associated certificates
+      operationId: deleteApp
+      parameters:
+        - name: appId
+          in: path
+          description: ID of the app to delete
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: App deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: App deleted successfully
+        '404':
+          description: App not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/apps/{appId}/targets:
+    put:
+      summary: Update app targets
+      description: Updates the target URLs for an application
+      operationId: updateAppTargets
+      parameters:
+        - name: appId
+          in: path
+          description: ID of the app to update
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTargetsRequest'
+      responses:
+        '200':
+          description: Updated application details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppConfig'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: App not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/apps/{appId}/rotate-cert:
+    post:
+      summary: Rotate client certificate
+      description: Generates a new client certificate for an application
+      operationId: rotateAppCert
+      parameters:
+        - name: appId
+          in: path
+          description: ID of the app to rotate the certificate for
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: New certificate details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RotateCertResponse'
+        '404':
+          description: App not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/ca-cert:
+    get:
+      summary: Get CA certificate
+      description: Downloads the Certificate Authority certificate
+      operationId: getCACert
+      responses:
+        '200':
+          description: CA certificate in PEM format
+          content:
+            application/x-pem-file:
+              schema:
+                type: string
+                format: binary
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    CreateAppRequest:
+      type: object
+      required:
+        - appId
+        - targetUrls
+      properties:
+        appId:
+          type: string
+          description: Unique identifier for the application
+          example: my-app
+        targetUrls:
+          type: object
+          description: Map of path prefixes to target URLs
+          additionalProperties:
+            type: string
+          example:
+            "/api/v1": "https://api.example.com/v1"
+            "/static": "https://static.example.com"
+
+    CreateAppResponse:
+      type: object
+      properties:
+        appId:
+          type: string
+          example: my-app
+        certs:
+          type: object
+          properties:
+            certFile:
+              type: string
+              example: ./certs/my-app.crt
+            keyFile:
+              type: string
+              example: ./certs/my-app.key
+            fingerprint:
+              type: string
+              example: ab1234567890
+            expiresAt:
+              type: string
+              format: date-time
+              example: "2024-04-12T12:00:00Z"
+        targetUrls:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            "/api/v1": "https://api.example.com/v1"
+            "/static": "https://static.example.com"
+
+    UpdateTargetsRequest:
+      type: object
+      required:
+        - targetUrls
+      properties:
+        targetUrls:
+          type: object
+          description: Map of path prefixes to target URLs
+          additionalProperties:
+            type: string
+          example:
+            "/api/v1": "https://new-api.example.com/v1"
+            "/static": "https://new-static.example.com"
+
+    RotateCertResponse:
+      type: object
+      properties:
+        appId:
+          type: string
+          example: my-app
+        certs:
+          type: object
+          properties:
+            certFile:
+              type: string
+              example: ./certs/my-app.crt
+            keyFile:
+              type: string
+              example: ./certs/my-app.key
+            fingerprint:
+              type: string
+              example: cd9876543210
+            expiresAt:
+              type: string
+              format: date-time
+              example: "2024-04-12T12:00:00Z"
+
+    ClientCertInfo:
+      type: object
+      properties:
+        certFile:
+          type: string
+          example: ./certs/my-app.crt
+        keyFile:
+          type: string
+          example: ./certs/my-app.key
+        fingerprint:
+          type: string
+          example: ab1234567890
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2024-04-12T12:00:00Z"
+
+    AppConfig:
+      type: object
+      properties:
+        appId:
+          type: string
+          example: my-app
+        targetUrls:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            "/api/v1": "https://api.example.com/v1"
+            "/static": "https://static.example.com"
+        clientCerts:
+          $ref: '#/components/schemas/ClientCertInfo'
+        created:
+          type: string
+          format: date-time
+          example: "2023-04-12T10:00:00Z"
+        updated:
+          type: string
+          format: date-time
+          example: "2023-04-12T10:00:00Z"
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Invalid request"
