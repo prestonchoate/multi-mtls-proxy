@@ -15,10 +15,10 @@
 !go.mod
 
 !README.md
+!docs/*
+!docs/**
 !LICENSE
 
-!static/**
-!static/*
 
 #!.goreleaser.yaml
 #!.github/*

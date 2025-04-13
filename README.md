@@ -121,7 +121,7 @@ The multi-tenant mTLS proxy consists of the following components:
 5. **Metrics and Monitoring**: Collects and exposes operational metrics
 
 ## API Reference
-[TODO: Document any management APIs or endpoints]
+See [API Reference Guide](./docs/mtls-proxy-api-reference.md)
 
 ## Performance
 [TODO: Include performance metrics, benchmarks, or considerations]
