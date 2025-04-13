@@ -52,8 +52,10 @@ If they do not exist they will be created. Required CA cert and key will be crea
 ### Environment Variables
 The proxy can also be configured using environment variables:
 
-[!CAUTION]
-NOT YET IMPLEMENTED
+<div class="alert">
+<strong>WARNING!</strong> NOT YET IMPLEMENTED
+</div>
+<br>
 
 - `ADMIN_API_PORT`: Admin Server Port (default: 8080)
 - `MTLS_PROXY_PORT`: Server port (default: 8443)
@@ -75,8 +77,9 @@ curl --cert client.crt --key client.key --cacert ca.crt https://proxy.example.co
 ```
 
 ### Tenant Management
-[!CAUTION]
-NO ADMIN AUTHENTICATION CURRENTLY IMPLEMENTED
+<div class="alert">
+  <strong>WARNING!:</strong> NO ADMIN AUTHENTICATION CURRENTLY IMPLEMENTED
+</div>
 
 ### Create new client app
   1. Send POST request to `/admin/apps` with the following payload structure
