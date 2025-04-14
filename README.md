@@ -52,17 +52,13 @@ If they do not exist they will be created. Required CA cert and key will be crea
 ### Environment Variables
 The proxy can also be configured using environment variables:
 
-<div class="alert">
-<strong>WARNING!</strong> NOT YET IMPLEMENTED
-</div>
-<br>
-
-- `ADMIN_API_PORT`: Admin Server Port (default: 8080)
-- `MTLS_PROXY_PORT`: Server port (default: 8443)
+- `ADMIN_API_PORT`: Admin Server Port (default: `8080`)
+- `MTLS_PROXY_PORT`: Server port (default: `8443`)
 - `CERT_DIR`: Directory to store certificate files and keys (default: `./certs/`)
 - `CA_DIR`: Directory to store Root CA cert and key (default: `./ca/`)
 - `PROXY_SERVER_CERT_FILE`: Path to server certificate (default: `./certs/server.crt`)
 - `PROXY_SERVER_KEY_FILE`: Path to server private key (default: `./certs/server.key`)
+- `HOSTNAME`: Hostname for the server (default: `localhost`)
 
 ## Usage
 
@@ -112,6 +108,8 @@ curl --cert client.crt --key client.key --cacert ca.crt https://proxy.example.co
 ## Architecture
 [TODO: Diagram or description of the architecture]
 
+See [Roadmap](./docs/roadmap.md) for future considerations
+
 The multi-tenant mTLS proxy consists of the following components:
 
 1. **TLS Termination Layer**: Handles incoming mTLS connections and certificate validation
@@ -121,7 +119,8 @@ The multi-tenant mTLS proxy consists of the following components:
 5. **Metrics and Monitoring**: Collects and exposes operational metrics
 
 ## API Reference
-See [API Reference Guide](./docs/mtls-proxy-api-reference.md)
+See [API Reference Guide](./docs/mtls-proxy-api-reference.md) or the [OpenAPI spec](./docs/openapi.yaml)
+
 
 ## Performance
 [TODO: Include performance metrics, benchmarks, or considerations]
@@ -139,4 +138,4 @@ See [API Reference Guide](./docs/mtls-proxy-api-reference.md)
 5. Submit a pull request
 
 ## License
-[TODO: Specify license information]
+See [LICENSE](./LICENSE)
