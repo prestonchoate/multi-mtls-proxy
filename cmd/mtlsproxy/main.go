@@ -12,7 +12,7 @@ import (
 
 func main() {
 	// Initialize configuration
-	cfg := config.LoadConfig()
+	cfg := config.GetConfig()
 
 	// Create necessary directories
 	config.CreateDirectories(cfg)
