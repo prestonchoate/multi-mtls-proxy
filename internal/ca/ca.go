@@ -195,7 +195,7 @@ func (ca *CertificateAuthority) GenerateClientCertificate(appID string, cfg *mod
 		NotBefore:             time.Now().Add(-10 * time.Minute), // Allow for clock skew
 		NotAfter:              expiresAt,
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 		IsCA:                  false,
 	}
@@ -270,8 +270,9 @@ func (ca *CertificateAuthority) CreateProxyCert(cfg *models.Config) error {
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			Organization: []string{"mTLS Proxy"},
-			CommonName:   "localhost",
+			CommonName:   cfg.HostName,
 		},
+		DNSNames:              []string{cfg.HostName},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,

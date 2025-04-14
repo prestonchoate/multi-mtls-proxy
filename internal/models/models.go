@@ -15,6 +15,7 @@ type Config struct {
 	ProxyServerKeyFile  string `json:"proxyServerKeyFile"`
 	ConfigFile          string `json:"configFile"`
 	CertValidityDays    int    `json:"certValidityDays"`
+	HostName            string `json:"hostname"`
 }
 
 // AppConfig represents an application configuration for proxying
