@@ -18,7 +18,7 @@
 !docs/*
 !docs/**
 !LICENSE
-
+!.env.dist
 
 #!.goreleaser.yaml
 #!.github/*

@@ -53,12 +53,17 @@ If they do not exist they will be created. Required CA cert and key will be crea
 The proxy can also be configured using environment variables:
 
 - `ADMIN_API_PORT`: Admin Server Port (default: `8080`)
-- `MTLS_PROXY_PORT`: Server port (default: `8443`)
+- `PROXY_PORT`: Server port (default: `8443`)
 - `CERT_DIR`: Directory to store certificate files and keys (default: `./certs/`)
-- `CA_DIR`: Directory to store Root CA cert and key (default: `./ca/`)
+- `CA_KEY_FILE`: Path to Root CA key file (default: `./ca/ca.key`)
+- `CA_CERT_FILE`: Path to Root CA Cert file (default: `./ca/ca.crt`)
 - `PROXY_SERVER_CERT_FILE`: Path to server certificate (default: `./certs/server.crt`)
 - `PROXY_SERVER_KEY_FILE`: Path to server private key (default: `./certs/server.key`)
+- `CONFIG_FILE`: Path to app conifg file (default: `./config/apps.json`)
+- `CERT_VALIDITY_DAYS`: Number to days to issue client certificates for (default: `365`)
 - `HOSTNAME`: Hostname for the server (default: `localhost`)
+
+The repository provides a `.env.dist` with these default values. It is not required to copy this into a `.env` file, but if you choose to change any configs you may do so with that method. 
 
 ## Usage
 
