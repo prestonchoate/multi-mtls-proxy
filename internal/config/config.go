@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
 
 	"maps"
@@ -67,7 +66,7 @@ func checkEnvVar[T any](varName string, defaults models.Config) T {
 	}
 
 	// Fallback: get default from struct field
-	fieldName := envVarToFieldName(varName)
+	fieldName := defaults.EnvVarToFieldName(varName)
 	valRef := reflect.ValueOf(defaults)
 	field := valRef.FieldByName(fieldName)
 	if field.IsValid() && field.CanInterface() {
@@ -77,15 +76,6 @@ func checkEnvVar[T any](varName string, defaults models.Config) T {
 	}
 
 	return zero
-}
-
-// envVarToFieldName converts ENV_VAR_NAME to StructFieldName (e.g., ADMIN_API_PORT → AdminAPIPort)
-func envVarToFieldName(envVar string) string {
-	parts := strings.Split(strings.ToLower(envVar), "_")
-	for i, part := range parts {
-		parts[i] = strings.Title(part)
-	}
-	return strings.Join(parts, "")
 }
 
 func GetConfig() *models.Config {
@@ -125,6 +115,18 @@ func getDefaultConfig() models.Config {
 		ConfigFile:          "./config/apps.json",
 		CertValidityDays:    365,
 		HostName:            "localhost",
+		Mapping: map[string]string{
+			"ADMIN_API_PORT":         "AdminAPIPort",
+			"PROXY_PORT":             "ProxyPort",
+			"CERT_DIR":               "CertDir",
+			"CA_KEY_FILE":            "CAKeyFile",
+			"CA_CERT_FILE":           "CACertFile",
+			"PROXY_SERVER_CERT_FILE": "ProxyServerCertFile",
+			"PROXY_SERVER_KEY_FILE":  "ProxyServerKeyFile",
+			"CONFIG_FILE":            "ConfigFile",
+			"CERT_VALIDITY_DAYS":     "CertValidityDays",
+			"HOSTNAME":               "HostName",
+		},
 	}
 }
 

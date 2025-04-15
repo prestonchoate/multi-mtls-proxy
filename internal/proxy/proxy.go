@@ -88,7 +88,6 @@ func (s *Server) proxyHandler(w http.ResponseWriter, r *http.Request) {
 	var matchedPathPrefix string
 
 	for pathPrefix, target := range app.TargetURLs {
-		log.Printf("checking path: %v - %v\tagainst %v\n", pathPrefix, target, r.URL.Path)
 		// Find the longest matching path prefix
 		if r.URL.Path == pathPrefix || (len(r.URL.Path) > len(pathPrefix) &&
 			r.URL.Path[:len(pathPrefix)] == pathPrefix &&

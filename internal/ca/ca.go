@@ -127,11 +127,11 @@ func (ca *CertificateAuthority) create(cfg *models.Config) error {
 	config.IOMutex.Lock()
 	if err := os.MkdirAll(filepath.Dir(cfg.CAKeyFile), 0755); err != nil {
 		config.IOMutex.Unlock()
-		return fmt.Errorf("failed to create CA key directory: %w", err)
+		return fmt.Errorf("failed to create CA key directory %s: %w", cfg.CAKeyFile, err)
 	}
 	if err := os.WriteFile(cfg.CAKeyFile, keyPEM, 0600); err != nil {
 		config.IOMutex.Unlock()
-		return fmt.Errorf("failed to write CA key file: %w", err)
+		return fmt.Errorf("failed to write CA key file to %s: %w", cfg.CAKeyFile, err)
 	}
 	config.IOMutex.Unlock()
 
@@ -144,7 +144,7 @@ func (ca *CertificateAuthority) create(cfg *models.Config) error {
 	config.IOMutex.Lock()
 	if err := os.WriteFile(cfg.CACertFile, certPEM, 0644); err != nil {
 		config.IOMutex.Unlock()
-		return fmt.Errorf("failed to write CA cert file: %w", err)
+		return fmt.Errorf("failed to write CA cert file to %s: %w", cfg.CACertFile, err)
 	}
 	config.IOMutex.Unlock()
 
