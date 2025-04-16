@@ -87,16 +87,20 @@ func GetConfig() *models.Config {
 	defaults := getDefaultConfig()
 
 	configInstance = &models.Config{
-		AdminAPIPort:        checkEnvVar[int]("ADMIN_API_PORT", defaults),
-		ProxyPort:           checkEnvVar[int]("PROXY_PORT", defaults),
-		CertDir:             checkEnvVar[string]("CERT_DIR", defaults),
-		CAKeyFile:           checkEnvVar[string]("CA_KEY_FILE", defaults),
-		CACertFile:          checkEnvVar[string]("CA_CERT_FILE", defaults),
-		ProxyServerCertFile: checkEnvVar[string]("PROXY_SERVER_CERT_FILE", defaults),
-		ProxyServerKeyFile:  checkEnvVar[string]("PROXY_SERVER_KEY_FILE", defaults),
-		ConfigFile:          checkEnvVar[string]("CONFIG_FILE", defaults),
-		CertValidityDays:    checkEnvVar[int]("CERT_VALIDITY_DAYS", defaults),
-		HostName:            checkEnvVar[string]("HOSTNAME", defaults),
+		AdminAPIPort:         checkEnvVar[int]("ADMIN_API_PORT", defaults),
+		ProxyPort:            checkEnvVar[int]("PROXY_PORT", defaults),
+		CertDir:              checkEnvVar[string]("CERT_DIR", defaults),
+		CAKeyFile:            checkEnvVar[string]("CA_KEY_FILE", defaults),
+		CACertFile:           checkEnvVar[string]("CA_CERT_FILE", defaults),
+		ProxyServerCertFile:  checkEnvVar[string]("PROXY_SERVER_CERT_FILE", defaults),
+		ProxyServerKeyFile:   checkEnvVar[string]("PROXY_SERVER_KEY_FILE", defaults),
+		ConfigFile:           checkEnvVar[string]("CONFIG_FILE", defaults),
+		CertValidityDays:     checkEnvVar[int]("CERT_VALIDITY_DAYS", defaults),
+		HostName:             checkEnvVar[string]("HOSTNAME", defaults),
+		DefaultAdminUser:     checkEnvVar[string]("DEFAULT_ADMIN_USER", defaults),
+		DefaultAdminPassword: checkEnvVar[string]("DEFAULT_ADMIN_PASSWORD", defaults),
+		JWTSigningKeyFile:    checkEnvVar[string]("JWT_SIGNING_KEY_FILE", defaults),
+		JWTSigningCertFile:   checkEnvVar[string]("JWT_SIGNING_CERT_FILE", defaults),
 	}
 
 	return configInstance
@@ -105,16 +109,20 @@ func GetConfig() *models.Config {
 // getDefaultConfig returns a default configuration
 func getDefaultConfig() models.Config {
 	return models.Config{
-		AdminAPIPort:        8080,
-		ProxyPort:           8443,
-		CertDir:             "./certs",
-		CAKeyFile:           "./ca/ca.key",
-		CACertFile:          "./ca/ca.crt",
-		ProxyServerCertFile: "./certs/server.crt",
-		ProxyServerKeyFile:  "./certs/server.key",
-		ConfigFile:          "./config/apps.json",
-		CertValidityDays:    365,
-		HostName:            "localhost",
+		AdminAPIPort:         8080,
+		ProxyPort:            8443,
+		CertDir:              "./certs",
+		CAKeyFile:            "./ca/ca.key",
+		CACertFile:           "./ca/ca.crt",
+		ProxyServerCertFile:  "./certs/server.crt",
+		ProxyServerKeyFile:   "./certs/server.key",
+		ConfigFile:           "./config/apps.json",
+		CertValidityDays:     365,
+		HostName:             "localhost",
+		DefaultAdminUser:     "admin",
+		DefaultAdminPassword: "password",
+		JWTSigningKeyFile:    "./certs/admin.key",
+		JWTSigningCertFile:   "./certs/admin.crt",
 		Mapping: map[string]string{
 			"ADMIN_API_PORT":         "AdminAPIPort",
 			"PROXY_PORT":             "ProxyPort",
@@ -126,6 +134,10 @@ func getDefaultConfig() models.Config {
 			"CONFIG_FILE":            "ConfigFile",
 			"CERT_VALIDITY_DAYS":     "CertValidityDays",
 			"HOSTNAME":               "HostName",
+			"DEFAULT_ADMIN_USER":     "DefaultAdminUser",
+			"DEFAULT_ADMIN_PASSWORD": "DefaultAdminPassword",
+			"JWT_SIGNING_KEY_FILE":   "JWTSigningKeyFile",
+			"JWT_SIGNING_CERT_FILE":  "JWTSigningCertFile",
 		},
 	}
 }
