@@ -12,7 +12,6 @@ import (
 
 func (s *Server) validateAdminAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Println("validating admin auth")
 		authHeader := c.Request.Header.Get("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 			log.Printf("bad header: %v", authHeader)

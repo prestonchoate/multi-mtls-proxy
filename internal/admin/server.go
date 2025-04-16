@@ -12,8 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"maps"
-
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -57,6 +55,7 @@ func (s *Server) Start() {
 		}
 	}
 	router := gin.Default()
+	router.Use(s.CORSMiddleware())
 	// Public Admin API endpoints
 	public := router.Group("/admin")
 	{

@@ -62,6 +62,10 @@ The proxy can also be configured using environment variables:
 - `CONFIG_FILE`: Path to app conifg file (default: `./config/apps.json`)
 - `CERT_VALIDITY_DAYS`: Number to days to issue client certificates for (default: `365`)
 - `HOSTNAME`: Hostname for the server (default: `localhost`)
+- `DEFAULT_ADMIN_USER`: Default admin username (default: `admin`)
+- `DEFAULT_ADMIN_PASSWORD`: Default admin password (default: `password`)
+- `JWT_SIGNING_KEY_FILE`: Path to admin JWT signing key (default `./certs/admin.key`)
+- `JWT_SIGNING_CERT_FILE`: Path to admin JWT signing cert (default `./certs/admin.crt`)
 
 The repository provides a `.env.dist` with these default values. It is not required to copy this into a `.env` file, but if you choose to change any configs you may do so with that method. 
 
