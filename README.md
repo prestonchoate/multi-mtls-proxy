@@ -62,8 +62,15 @@ The proxy can also be configured using environment variables:
 - `CONFIG_FILE`: Path to app conifg file (default: `./config/apps.json`)
 - `CERT_VALIDITY_DAYS`: Number to days to issue client certificates for (default: `365`)
 - `HOSTNAME`: Hostname for the server (default: `localhost`)
+- `DEFAULT_ADMIN_USER`: Default admin username (default: `admin`)
+- `DEFAULT_ADMIN_PASSWORD`: Default admin password (default: `password`)
+- `JWT_SIGNING_KEY_FILE`: Path to admin JWT signing key (default `./certs/admin.key`)
+- `JWT_SIGNING_CERT_FILE`: Path to admin JWT signing cert (default `./certs/admin.crt`)
 
 The repository provides a `.env.dist` with these default values. It is not required to copy this into a `.env` file, but if you choose to change any configs you may do so with that method. 
+
+**WARNING**: The default credentials are not secure. Always change `DEFAULT_ADMIN_USER` and `DEFAULT_ADMIN_PASSWORD` in production deployments!
+
 
 ## Usage
 
@@ -78,11 +85,8 @@ curl --cert client.crt --key client.key --cacert ca.crt https://proxy.example.co
 ```
 
 ### Tenant Management
-<div class="alert">
-  <strong>WARNING!:</strong> NO ADMIN AUTHENTICATION CURRENTLY IMPLEMENTED
-</div>
 
-### Create new client app
+#### Create new client app
   1. Send POST request to `/admin/apps` with the following payload structure
   ```json
 {
@@ -96,10 +100,10 @@ curl --cert client.crt --key client.key --cacert ca.crt https://proxy.example.co
 
   2. Distribute client cert and key to end user. This will live in the `CERT_DIR` directory and be named the client `appId` (`test-app.crt` and `test-app.key` for this example)
 
-### Rotate Client Cert/Key Pair
+#### Rotate Client Cert/Key Pair
   - Send a `POST` request to `/admin/apps/:appId/rotate-cert` and re-distribute the new cert/key pair
 
-### Update Client Target URLs
+#### Update Client Target URLs
   - Send a `PUT` request to `/admin/apps/:appId/targets` with the following payload structure
   ```json
   {

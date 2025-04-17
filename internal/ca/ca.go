@@ -323,3 +323,75 @@ func (ca *CertificateAuthority) CheckProxyCert(cfg *models.Config) error {
 
 	return nil
 }
+
+func (ca *CertificateAuthority) CreateAdminSigningCert(cfg *models.Config) error {
+	ca.mutex.Lock()
+	defer ca.mutex.Unlock()
+
+	// Generate signing private key
+	signingKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
+		return fmt.Errorf("failed to generate signing key: %w", err)
+	}
+
+	// Create signing certificate template
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return fmt.Errorf("failed to generate serial number: %w", err)
+	}
+
+	signingCertTemplate := &x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization: []string{"mTLS Proxy"},
+			CommonName:   cfg.HostName,
+		},
+		DNSNames:              []string{cfg.HostName},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(time.Duration(cfg.CertValidityDays) * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	// Sign certificate with CA
+	signingCertDER, err := x509.CreateCertificate(rand.Reader, signingCertTemplate, ca.Certificate, &signingKey.PublicKey, ca.PrivateKey)
+	if err != nil {
+		return fmt.Errorf("failed to create signing certificate: %w", err)
+	}
+
+	// Save the signing certificate to file
+	signingCertPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: signingCertDER,
+	})
+
+	config.IOMutex.Lock()
+	defer config.IOMutex.Unlock()
+
+	if err := os.WriteFile(cfg.JWTSigningCertFile, signingCertPEM, 0644); err != nil {
+		return fmt.Errorf("failed to write signing certificate file: %w", err)
+	}
+
+	// Save the signing key to file
+	serverKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(signingKey),
+	})
+
+	if err := os.WriteFile(cfg.JWTSigningKeyFile, serverKeyPEM, 0600); err != nil {
+		return fmt.Errorf("failed to write signing key file: %w", err)
+	}
+
+	return nil
+}
+
+func (ca *CertificateAuthority) CheckAdminSigningCert(cfg *models.Config) error {
+	_, err1 := os.Stat(cfg.JWTSigningCertFile)
+	_, err2 := os.Stat(cfg.JWTSigningKeyFile)
+
+	if os.IsNotExist(err1) || os.IsNotExist(err2) {
+		return ca.CreateAdminSigningCert(cfg)
+	}
+	return nil
+}

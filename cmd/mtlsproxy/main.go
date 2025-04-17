@@ -28,6 +28,11 @@ func main() {
 		log.Fatalf("Failed to check/create proxy certificates: %v", err)
 	}
 
+	// Check and create admin signing cert/key if needed
+	if err := certAuth.CheckAdminSigningCert(cfg); err != nil {
+		log.Fatalf("Failed to check/create admin signing cert: %v", err)
+	}
+
 	// Load app configs
 	appConfigs, err := config.LoadAppConfigs(cfg)
 	if err != nil {
