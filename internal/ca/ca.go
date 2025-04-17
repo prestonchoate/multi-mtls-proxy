@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -162,6 +163,11 @@ func (ca *CertificateAuthority) create(cfg *models.Config) error {
 
 // GenerateClientCertificate generates a client certificate for an app
 func (ca *CertificateAuthority) GenerateClientCertificate(appID string, cfg *models.Config) (models.ClientCertInfo, error) {
+	// Verify appID doesn't contain path separators or other bad things that could cause path traversal shenanigans
+	if strings.Contains(appID, "/") || strings.Contains(appID, "\\") || strings.Contains(appID, "..") {
+		return models.ClientCertInfo{}, fmt.Errorf("bad app ID. cannot generate cert")
+	}
+
 	// Lock for certificate generation
 	certMutex := sync.Mutex{}
 	certMutex.Lock()
