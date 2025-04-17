@@ -14,7 +14,7 @@ func (s *Server) validateAdminAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.Request.Header.Get("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			log.Printf("bad header: %v", authHeader)
+			log.Println("Auth header is missing or invalid")
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized"})
 			c.Abort()
 			return
@@ -23,6 +23,7 @@ func (s *Server) validateAdminAuth() gin.HandlerFunc {
 
 		pubKey, err := s.getSigningCert()
 		if err != nil {
+			log.Printf("Failed to load signing cert: %v\n", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "internal error"})
 			c.Abort()
 			return
@@ -39,7 +40,7 @@ func (s *Server) validateAdminAuth() gin.HandlerFunc {
 		)
 
 		if err != nil || !token.Valid {
-			log.Printf("invalid token: %v", err)
+			log.Println("invalid token")
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized"})
 			c.Abort()
 			return
@@ -49,7 +50,7 @@ func (s *Server) validateAdminAuth() gin.HandlerFunc {
 		if ok {
 			sub, ok := claims["sub"].(string)
 			if !ok {
-				log.Printf("admin ID is not valid")
+				log.Println("admin ID is not valid in token claims")
 				c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized"})
 				c.Abort()
 				return
@@ -57,7 +58,7 @@ func (s *Server) validateAdminAuth() gin.HandlerFunc {
 
 			adminId, err := uuid.Parse(sub)
 			if err != nil {
-				log.Printf("invalid UUID in sub claim: %v", err)
+				log.Println("invalid UUID in sub claim")
 				c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized"})
 				c.Abort()
 				return
@@ -65,7 +66,7 @@ func (s *Server) validateAdminAuth() gin.HandlerFunc {
 
 			admin := s.getAdminById(adminId)
 			if admin == nil {
-				log.Printf("admin ID %v is not valid", adminId)
+				log.Println("admin ID is not valid")
 				c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized"})
 				c.Abort()
 				return

@@ -354,7 +354,7 @@ func (ca *CertificateAuthority) CreateAdminSigningCert(cfg *models.Config) error
 		BasicConstraintsValid: true,
 	}
 
-	// Self-sign the certificate with our CA
+	// Sign certificate with CA
 	signingCertDER, err := x509.CreateCertificate(rand.Reader, signingCertTemplate, ca.Certificate, &signingKey.PublicKey, ca.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("failed to create signing certificate: %w", err)
