@@ -1,15 +1,14 @@
 package main
 
 import (
-	"log"
-
 	"github.com/prestonchoate/mtlsProxy/internal/admin"
 	"github.com/prestonchoate/mtlsProxy/internal/ca"
 	"github.com/prestonchoate/mtlsProxy/internal/config"
 	"github.com/prestonchoate/mtlsProxy/internal/models"
-	"github.com/prestonchoate/mtlsProxy/internal/proxy"
+	"log"
 )
 
+// main is the entry point for the application, initializing configuration, certificate authority, and the admin API server. It ensures required directories and certificates exist, loads application configurations, and starts the admin server. The program terminates on critical initialization failures.
 func main() {
 	// Initialize configuration
 	cfg := config.GetConfig()
@@ -21,11 +20,6 @@ func main() {
 	certAuth := ca.New()
 	if err := certAuth.Initialize(cfg); err != nil {
 		log.Fatalf("Failed to initialize CA: %v", err)
-	}
-
-	// Check and create proxy certificates if needed
-	if err := certAuth.CheckProxyCert(cfg); err != nil {
-		log.Fatalf("Failed to check/create proxy certificates: %v", err)
 	}
 
 	// Check and create admin signing cert/key if needed
@@ -44,12 +38,6 @@ func main() {
 	// Initialize admin server
 	adminServer := admin.New(cfg, appConfigs, certAuth)
 
-	// Initialize proxy server
-	proxyServer := proxy.New(cfg, appConfigs)
-
-	// Start admin API server in a goroutine
-	go adminServer.Start()
-
-	// Start proxy server (blocking call)
-	proxyServer.Start()
+	// Start admin API server
+	adminServer.Start()
 }

@@ -28,10 +28,21 @@ A scalable, secure multi-tenant mTLS proxy written in Go that manages mutual TLS
 ## Installation
 
 ### From Source
+
+#### Admin Binary
+
 ```bash
 git clone https://github.com/prestonchoate/multi-mtls-proxy.git
 cd multi-mtls-proxy
-go build -o mtls-proxy ./cmd/mtlsproxy/
+go build -o mtls-admin ./cmd/admin/
+```
+
+#### Proxy Binary
+
+```bash
+git clone https://github.com/prestonchoate/multi-mtls-proxy.git
+cd multi-mtls-proxy
+go build -o mtls-proxy ./cmd/proxy/
 ```
 
 ### Using Docker
@@ -75,9 +86,20 @@ The repository provides a `.env.dist` with these default values. It is not requi
 ## Usage
 
 ### Starting the Proxy
+
+#### Admin Server
+
+```bash
+./mtls-admin
+```
+
+#### Proxy Server
+
 ```bash
 ./mtls-proxy
 ```
+
+**WARNING**: The proxy server will not hot reload app configs if they change from the admin while both binaries are running. This is due to the app config living in a file on the local filesystem. Simply restart the proxy server binary to pick up the latest changes. This will change in a future release
 
 ### Client Connection Example
 ```bash
