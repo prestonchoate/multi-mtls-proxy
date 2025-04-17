@@ -7,6 +7,7 @@ import (
 	"log"
 )
 
+// main is the entry point for the mTLS proxy application, handling configuration, certificate authority initialization, proxy certificate management, application configuration loading, and starting the proxy server.
 func main() {
 	// Initialize configuration
 	cfg := config.GetConfig()

@@ -8,6 +8,7 @@ import (
 	"log"
 )
 
+// main is the entry point for the application, initializing configuration, certificate authority, and the admin API server. It ensures required directories and certificates exist, loads application configurations, and starts the admin server. The program terminates on critical initialization failures.
 func main() {
 	// Initialize configuration
 	cfg := config.GetConfig()
