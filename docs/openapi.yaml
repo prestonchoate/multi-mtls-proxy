@@ -296,6 +296,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /admin/apps/{appId}/download-cert:
+    get:
+      summary: Download certificate bundle
+      description: Downloads the client certificate and key files as a ZIP archive
+      operationId: downloadAppCertBundle
+      tags:
+        - Apps
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: appId
+          in: path
+          description: ID of the app to download certificates for
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Certificate bundle in ZIP format
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: App not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /admin/ca-cert:
     get:
       summary: Get CA certificate
@@ -303,8 +346,6 @@ paths:
       operationId: getCACert
       tags:
         - Certificate Authority
-      security:
-        - bearerAuth: []
       responses:
         '200':
           description: CA certificate in PEM format
