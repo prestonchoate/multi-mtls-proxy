@@ -595,7 +595,6 @@ func (s *Server) downloadAppCertBundle(c *gin.Context) {
 	appID := c.Param("appId")
 
 	config.ConfigMutex.Lock()
-	defer config.ConfigMutex.Unlock()
 	app, exists := s.appConfigs[appID]
 	if !exists {
 		config.ConfigMutex.Unlock()
@@ -608,6 +607,8 @@ func (s *Server) downloadAppCertBundle(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
+	config.ConfigMutex.Unlock()
+
 	files := []string{
 		app.ClientCerts.CertFile,
 		app.ClientCerts.KeyFile,
@@ -625,10 +626,14 @@ func (s *Server) downloadAppCertBundle(c *gin.Context) {
 			return
 		}
 	}
-	zipWriter.Close()
+	if err := zipWriter.Close(); err != nil {
+		log.Printf("error closing zip writer: %s\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to finalize zip archive"})
+		return
+	}
 
 	c.Header("Content-Type", "application/zip")
-	c.Header("Content-Disposition", `attachment; filename="cert_bundle.zip"`)
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s_cert_bundle.zip"`, appID))
 	c.Data(http.StatusOK, "application/zip", buf.Bytes())
 }
 
