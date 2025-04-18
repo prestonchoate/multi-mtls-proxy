@@ -1,10 +1,13 @@
 package admin
 
 import (
+	"archive/zip"
+	"bytes"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -82,6 +85,9 @@ func (s *Server) Start() {
 
 		// Get a specific app
 		admin.GET("/apps/:appId", s.getApp)
+
+		// Download cert bundle for app
+		admin.GET("/apps/:appId/download-cert", s.downloadAppCertBundle)
 
 		// Update app target URLs
 		admin.PUT("/apps/:appId/targets", s.updateAppTargets)
@@ -569,6 +575,7 @@ func (s *Server) getAdminById(adminId uuid.UUID) *models.AdminUser {
 func (s *Server) extractAdminFromContext(c *gin.Context) *models.AdminUser {
 	a, exists := c.Get("admin")
 	if !exists {
+
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user"})
 		return nil
 	}
@@ -580,4 +587,81 @@ func (s *Server) extractAdminFromContext(c *gin.Context) *models.AdminUser {
 	}
 
 	return adminUser
+}
+
+// handle serving cert/key bundle as zip
+func (s *Server) downloadAppCertBundle(c *gin.Context) {
+	adminUser := s.extractAdminFromContext(c)
+	appID := c.Param("appId")
+
+	config.ConfigMutex.Lock()
+	app, exists := s.appConfigs[appID]
+	if !exists {
+		config.ConfigMutex.Unlock()
+		c.JSON(http.StatusNotFound, gin.H{"error": "App not found"})
+		return
+	}
+
+	if app.Owner != adminUser.ID {
+		config.ConfigMutex.Unlock()
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	config.ConfigMutex.Unlock()
+
+	files := []string{
+		app.ClientCerts.CertFile,
+		app.ClientCerts.KeyFile,
+	}
+
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+
+	for _, file := range files {
+		err := s.addFileToZip(zipWriter, file)
+		if err != nil {
+			zipWriter.Close()
+			log.Printf("something went wrong adding file to zip: %s\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
+			return
+		}
+	}
+	if err := zipWriter.Close(); err != nil {
+		log.Printf("error closing zip writer: %s\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to finalize zip archive"})
+		return
+	}
+
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s_cert_bundle.zip"`, appID))
+	c.Data(http.StatusOK, "application/zip", buf.Bytes())
+}
+
+// Helper function to add files to zip
+func (s *Server) addFileToZip(zipWriter *zip.Writer, filePath string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
+	header, err := zip.FileInfoHeader(info)
+	if err != nil {
+		return err
+	}
+	header.Name = info.Name()
+	header.Method = zip.Deflate
+
+	writer, err := zipWriter.CreateHeader(header)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(writer, file)
+	return err
 }
