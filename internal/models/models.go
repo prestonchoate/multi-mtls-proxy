@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // Config represents the application configuration
@@ -22,6 +23,10 @@ type Config struct {
 	DefaultAdminPassword string            `json:"-"`
 	JWTSigningCertFile   string            `json:"jwtSigningCertFile"`
 	JWTSigningKeyFile    string            `json:"jwtSigningKeyFile"`
+	MongoURI             string            `json:"mongoURI"`
+	MongoDB              string            `json:"mongoDB"`
+	MongoAppsColl        string            `json:"mongoAppsColl"`
+	MongoUsersColl       string            `json:"mongoUsersColl"`
 	Mapping              map[string]string `json:"-"`
 }
 
@@ -36,12 +41,13 @@ func (c *Config) EnvVarToFieldName(envVar string) string {
 
 // AppConfig represents an application configuration for proxying
 type AppConfig struct {
-	AppID       string            `json:"appId"`
-	TargetURLs  map[string]string `json:"targetUrls"` // path prefix -> target URL
-	ClientCerts ClientCertInfo    `json:"clientCerts"`
-	Owner       uuid.UUID         `json:"owner"`
-	Created     time.Time         `json:"created"`
-	Updated     time.Time         `json:"updated"`
+	ID          primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
+	AppID       string             `json:"appId" bson:"appId"`
+	TargetURLs  map[string]string  `json:"targetUrls" json:"targetUrls"` // path prefix -> target URL
+	ClientCerts ClientCertInfo     `json:"clientCerts" json:"clientCerts"`
+	Owner       uuid.UUID          `json:"owner" json:"owner"`
+	CreatedAt   time.Time          `json:"createdAt" json:"createdAt"`
+	UpdatedAt   time.Time          `json:"updatedAt" json:"updatedAt"`
 }
 
 // ClientCertInfo holds information about the client certificate
@@ -53,13 +59,13 @@ type ClientCertInfo struct {
 }
 
 type AdminUser struct {
-	ID           uuid.UUID `json:"id"`
-	UserName     string    `json:"userName"`
-	PasswordHash string    `json:"-"`
+	ID           uuid.UUID `json:"id" bson:"id"`
+	UserName     string    `json:"userName" bson:"userName"`
+	PasswordHash string    `json:"-" bson:"passwordHash"`
+	CreatedAt    time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt" bson:"updatedAt"`
+	LastLogin    time.Time `json:"lastLogin" bson:"lastLogin"`
 }
 
 // AppConfigs is a map of appID to AppConfig TODO: Convert this to persistent storage instead of file based
 type AppConfigs map[string]AppConfig
-
-// AdminUsers is a map of AdminUser.ID to *AdminUser TODO: Convert this to persistent storage
-type AdminUsers map[uuid.UUID]*AdminUser

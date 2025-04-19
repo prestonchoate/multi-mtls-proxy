@@ -3,6 +3,7 @@ package admin
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
@@ -12,7 +13,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -20,41 +20,52 @@ import (
 	"github.com/google/uuid"
 	"github.com/prestonchoate/mtlsProxy/internal/ca"
 	"github.com/prestonchoate/mtlsProxy/internal/config"
+	"github.com/prestonchoate/mtlsProxy/internal/db"
 	"github.com/prestonchoate/mtlsProxy/internal/models"
+	"github.com/prestonchoate/mtlsProxy/internal/repository"
 	"golang.org/x/crypto/bcrypt"
-)
-
-var (
-	adminUsersMutex sync.RWMutex
 )
 
 // Server represents the admin API server
 type Server struct {
-	config     *models.Config
-	appConfigs models.AppConfigs
-	ca         *ca.CertificateAuthority
-	adminUsers models.AdminUsers
+	config         *models.Config
+	appRepository  repository.AppRepository
+	userRepository repository.UserRepository
+	mongoClient    *db.MongoClient
+	ca             *ca.CertificateAuthority
 }
 
 // New creates a new admin server
-func New(cfg *models.Config, appCfgs models.AppConfigs, certAuth *ca.CertificateAuthority) *Server {
-	return &Server{
-		config:     cfg,
-		appConfigs: appCfgs,
-		ca:         certAuth,
-		adminUsers: make(models.AdminUsers, 0),
+func New(cfg *models.Config, certAuth *ca.CertificateAuthority) (*Server, error) {
+	mongoClient, err := db.NewMongoClient(cfg.MongoURI, cfg.MongoDB)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to MongoDB: %w", err)
 	}
+
+	appRepo := repository.NewMongoAppRepository(mongoClient, cfg.MongoAppsColl)
+	userRepo := repository.NewMongoUserRepository(mongoClient, cfg.MongoUsersColl)
+
+	db.EnsureIndexes(mongoClient, cfg)
+
+	return &Server{
+		config:         cfg,
+		ca:             certAuth,
+		appRepository:  appRepo,
+		userRepository: userRepo,
+	}, nil
 }
 
 // Start starts the admin API server
 func (s *Server) Start() {
-	if len(s.adminUsers) == 0 && s.config.DefaultAdminUser != "" && s.config.DefaultAdminPassword != "" {
+	existingAdmin, _ := s.userRepository.GetByUsername(context.Background(), s.config.DefaultAdminUser)
+	if existingAdmin == nil {
 		log.Println("Creating default admin user")
 		admin := s.createAdmin(s.config.DefaultAdminUser, s.config.DefaultAdminPassword)
 		if admin != nil {
-			adminUsersMutex.Lock()
-			s.adminUsers[admin.ID] = admin
-			adminUsersMutex.Unlock()
+			err := s.userRepository.Create(context.Background(), *admin)
+			if err != nil {
+				log.Printf("Failed to create default admin: %v\n", err)
+			}
 		}
 	}
 	router := gin.Default()
@@ -109,6 +120,7 @@ func (s *Server) Start() {
 
 // Create a new app
 func (s *Server) createApp(c *gin.Context) {
+	ctx := c.Request.Context()
 	adminUser := s.extractAdminFromContext(c)
 
 	var appRequest struct {
@@ -140,11 +152,8 @@ func (s *Server) createApp(c *gin.Context) {
 	}
 
 	// Check if app already exists
-	config.ConfigMutex.RLock()
-	_, exists := s.appConfigs[appRequest.AppID]
-	config.ConfigMutex.RUnlock()
-
-	if exists {
+	existingApp, err := s.appRepository.GetByID(ctx, appRequest.AppID)
+	if err == nil && existingApp != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "App ID already exists"})
 		return
 	}
@@ -163,73 +172,65 @@ func (s *Server) createApp(c *gin.Context) {
 		TargetURLs:  appRequest.TargetURLs,
 		ClientCerts: clientCertInfo,
 		Owner:       adminUser.ID,
-		Created:     now,
-		Updated:     now,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 
-	// Update the appConfigs map
-	config.ConfigMutex.Lock()
-	s.appConfigs[appRequest.AppID] = newApp
-	config.ConfigMutex.Unlock()
-
-	// Save updated configs
-	if err := config.SaveAppConfigs(s.config, s.appConfigs); err != nil {
+	if err := s.appRepository.Create(ctx, newApp); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save app config: %v", err)})
 		return
 	}
 
 	// Return client certificate information
 	c.JSON(http.StatusCreated, gin.H{
-		"appId": appRequest.AppID,
+		"appId": newApp.AppID,
 		"certs": gin.H{
 			"certFile":    clientCertInfo.CertFile,
 			"keyFile":     clientCertInfo.KeyFile,
 			"fingerprint": clientCertInfo.Fingerprint,
 			"expiresAt":   clientCertInfo.ExpiresAt,
 		},
-		"targetUrls": appRequest.TargetURLs,
+		"targetUrls": newApp.TargetURLs,
 	})
 }
 
 // Get all apps filtered by logged in user ID
 func (s *Server) getAllApps(c *gin.Context) {
+	ctx := c.Request.Context()
 	adminUser := s.extractAdminFromContext(c)
 
-	config.ConfigMutex.RLock()
-	configCopy := make(models.AppConfigs)
-	for k, v := range s.appConfigs {
-		if v.Owner == adminUser.ID {
-			configCopy[k] = v
-		}
+	apps, err := s.appRepository.GetAll(ctx, adminUser.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to retrieve app configs: %v", err))
+		return
 	}
-	config.ConfigMutex.RUnlock()
 
-	c.JSON(http.StatusOK, configCopy)
+	c.JSON(http.StatusOK, apps)
 }
 
 // Get a specific app
 func (s *Server) getApp(c *gin.Context) {
+	ctx := c.Request.Context()
 	adminUser := s.extractAdminFromContext(c)
 	appID := c.Param("appId")
 
-	config.ConfigMutex.RLock()
-	app, exists := s.appConfigs[appID]
-	config.ConfigMutex.RUnlock()
-
-	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "App not found"})
+	app, err := s.appRepository.GetByID(ctx, appID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to retrieve app config: %v", err))
 		return
 	}
 
 	if app.Owner != adminUser.ID {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "unauthorized"})
 		return
 	}
+
 	c.JSON(http.StatusOK, app)
 }
 
 // Update app target URLs
 func (s *Server) updateAppTargets(c *gin.Context) {
+	ctx := c.Request.Context()
 	adminUser := s.extractAdminFromContext(c)
 	appID := c.Param("appId")
 
@@ -255,12 +256,9 @@ func (s *Server) updateAppTargets(c *gin.Context) {
 		}
 	}
 
-	// Update app config
-	config.ConfigMutex.Lock()
-	app, exists := s.appConfigs[appID]
-	if !exists {
-		config.ConfigMutex.Unlock()
-		c.JSON(http.StatusNotFound, gin.H{"error": "App not found"})
+	app, err := s.appRepository.GetByID(ctx, appID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to retrieve app config: %v", err))
 		return
 	}
 
@@ -271,13 +269,11 @@ func (s *Server) updateAppTargets(c *gin.Context) {
 	}
 
 	app.TargetURLs = targetRequest.TargetURLs
-	app.Updated = time.Now()
-	s.appConfigs[appID] = app
-	config.ConfigMutex.Unlock()
+	app.UpdatedAt = time.Now()
 
-	// Save updated configs
-	if err := config.SaveAppConfigs(s.config, s.appConfigs); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save app config: %v", err)})
+	err = s.appRepository.Update(ctx, *app)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save updated app config: %v", err)})
 		return
 	}
 
@@ -286,15 +282,13 @@ func (s *Server) updateAppTargets(c *gin.Context) {
 
 // Rotate client certificate
 func (s *Server) rotateAppCert(c *gin.Context) {
+	ctx := c.Request.Context()
 	adminUser := s.extractAdminFromContext(c)
 	appID := c.Param("appId")
 
-	config.ConfigMutex.RLock()
-	app, exists := s.appConfigs[appID]
-	config.ConfigMutex.RUnlock()
-
-	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "App not found"})
+	app, err := s.appRepository.GetByID(ctx, appID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("Failed to retrieve app config: %v", err)})
 		return
 	}
 
@@ -311,14 +305,11 @@ func (s *Server) rotateAppCert(c *gin.Context) {
 	}
 
 	// Update app config
-	config.ConfigMutex.Lock()
 	app.ClientCerts = clientCertInfo
-	app.Updated = time.Now()
-	s.appConfigs[appID] = app
-	config.ConfigMutex.Unlock()
+	app.UpdatedAt = time.Now()
 
-	// Save updated configs
-	if err := config.SaveAppConfigs(s.config, s.appConfigs); err != nil {
+	err = s.appRepository.Update(ctx, *app)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save app config: %v", err)})
 		return
 	}
@@ -336,30 +327,24 @@ func (s *Server) rotateAppCert(c *gin.Context) {
 
 // Delete an app
 func (s *Server) deleteApp(c *gin.Context) {
+	ctx := c.Request.Context()
 	adminUser := s.extractAdminFromContext(c)
 	appID := c.Param("appId")
 
-	config.ConfigMutex.Lock()
-	app, exists := s.appConfigs[appID]
-	if !exists {
-		config.ConfigMutex.Unlock()
-		c.JSON(http.StatusNotFound, gin.H{"error": "App not found"})
-		return
+	app, err := s.appRepository.GetByID(ctx, appID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, "App not found")
 	}
 
 	if app.Owner != adminUser.ID {
-		config.ConfigMutex.Unlock()
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
 	// Remove from configs
-	delete(s.appConfigs, appID)
-	config.ConfigMutex.Unlock()
-
-	// Save updated configs before deleting files
-	if err := config.SaveAppConfigs(s.config, s.appConfigs); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save app config: %v", err)})
+	err = s.appRepository.Delete(ctx, appID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to delete app config: %v", err)})
 		return
 	}
 
@@ -392,6 +377,8 @@ func (s *Server) createAdminUser(c *gin.Context) {
 		Password string `json:"password"`
 	}
 
+	ctx := c.Request.Context()
+
 	if err := c.BindJSON(&adminCreateRequest); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Request"})
 		return
@@ -402,7 +389,8 @@ func (s *Server) createAdminUser(c *gin.Context) {
 		return
 	}
 
-	existingAdmin := s.getAdminByUsername(adminCreateRequest.UserName)
+	existingAdmin, _ := s.userRepository.GetByUsername(ctx, adminCreateRequest.UserName)
+
 	if existingAdmin != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Request"})
 		return
@@ -414,9 +402,11 @@ func (s *Server) createAdminUser(c *gin.Context) {
 		return
 	}
 
-	adminUsersMutex.Lock()
-	s.adminUsers[user.ID] = user
-	adminUsersMutex.Unlock()
+	err := s.userRepository.Create(ctx, *user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+		return
+	}
 
 	c.JSONP(http.StatusCreated, user)
 }
@@ -427,6 +417,9 @@ func (s *Server) adminLogin(c *gin.Context) {
 		UserName string `json:"username"`
 		Password string `json:"password"`
 	}
+
+	ctx := c.Request.Context()
+
 	if err := c.BindJSON(&adminLoginRequest); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Request"})
 		return
@@ -437,8 +430,8 @@ func (s *Server) adminLogin(c *gin.Context) {
 		return
 	}
 
-	existingAdmin := s.getAdminByUsername(adminLoginRequest.UserName)
-	if existingAdmin == nil {
+	existingAdmin, err := s.userRepository.GetByUsername(ctx, adminLoginRequest.UserName)
+	if err != nil || existingAdmin == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Request"})
 		return
 	}
@@ -454,6 +447,13 @@ func (s *Server) adminLogin(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Something went wrong"})
 		return
 	}
+
+	existingAdmin.LastLogin = time.Now()
+	err = s.userRepository.Update(ctx, *existingAdmin)
+	if err != nil {
+		log.Println("Failed to update last login time for admin: ", existingAdmin.ID, " Error was: ", err)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"token": token})
 
 }
@@ -547,30 +547,6 @@ func (s *Server) createAdmin(username string, password string) *models.AdminUser
 	}
 }
 
-// Look up admin by username
-func (s *Server) getAdminByUsername(username string) *models.AdminUser {
-	adminUsersMutex.RLock()
-	for _, admin := range s.adminUsers {
-		if admin.UserName == username {
-			adminUsersMutex.RUnlock()
-			return admin
-		}
-	}
-	adminUsersMutex.RUnlock()
-	return nil
-}
-
-// Look up admin by ID
-func (s *Server) getAdminById(adminId uuid.UUID) *models.AdminUser {
-	adminUsersMutex.RLock()
-	admin, exists := s.adminUsers[adminId]
-	if !exists {
-		return nil
-	}
-	adminUsersMutex.RUnlock()
-	return admin
-}
-
 // Helper function to get admin from context or respond with 401 error
 func (s *Server) extractAdminFromContext(c *gin.Context) *models.AdminUser {
 	a, exists := c.Get("admin")
@@ -591,15 +567,14 @@ func (s *Server) extractAdminFromContext(c *gin.Context) *models.AdminUser {
 
 // handle serving cert/key bundle as zip
 func (s *Server) downloadAppCertBundle(c *gin.Context) {
+	ctx := c.Request.Context()
 	adminUser := s.extractAdminFromContext(c)
 	appID := c.Param("appId")
 
-	config.ConfigMutex.Lock()
-	app, exists := s.appConfigs[appID]
-	if !exists {
-		config.ConfigMutex.Unlock()
+	app, err := s.appRepository.GetByID(ctx, appID)
+
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "App not found"})
-		return
 	}
 
 	if app.Owner != adminUser.ID {
@@ -607,7 +582,6 @@ func (s *Server) downloadAppCertBundle(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	config.ConfigMutex.Unlock()
 
 	files := []string{
 		app.ClientCerts.CertFile,

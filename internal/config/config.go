@@ -101,6 +101,10 @@ func GetConfig() *models.Config {
 		DefaultAdminPassword: checkEnvVar[string]("DEFAULT_ADMIN_PASSWORD", defaults),
 		JWTSigningKeyFile:    checkEnvVar[string]("JWT_SIGNING_KEY_FILE", defaults),
 		JWTSigningCertFile:   checkEnvVar[string]("JWT_SIGNING_CERT_FILE", defaults),
+		MongoURI:             checkEnvVar[string]("MONGO_URI", defaults),
+		MongoDB:              checkEnvVar[string]("MONGO_DB", defaults),
+		MongoAppsColl:        checkEnvVar[string]("MONGO_APPS_COLL", defaults),
+		MongoUsersColl:       checkEnvVar[string]("MONGO_USERS_COLL", defaults),
 	}
 
 	return configInstance
@@ -123,6 +127,10 @@ func getDefaultConfig() models.Config {
 		DefaultAdminPassword: "password",
 		JWTSigningKeyFile:    "./certs/admin.key",
 		JWTSigningCertFile:   "./certs/admin.crt",
+		MongoURI:             "mongodb://localhost:27017",
+		MongoDB:              "mtlsProxy",
+		MongoAppsColl:        "apps",
+		MongoUsersColl:       "users",
 		Mapping: map[string]string{
 			"ADMIN_API_PORT":         "AdminAPIPort",
 			"PROXY_PORT":             "ProxyPort",

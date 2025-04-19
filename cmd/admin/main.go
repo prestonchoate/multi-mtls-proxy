@@ -4,7 +4,6 @@ import (
 	"github.com/prestonchoate/mtlsProxy/internal/admin"
 	"github.com/prestonchoate/mtlsProxy/internal/ca"
 	"github.com/prestonchoate/mtlsProxy/internal/config"
-	"github.com/prestonchoate/mtlsProxy/internal/models"
 	"log"
 )
 
@@ -28,15 +27,19 @@ func main() {
 	}
 
 	// Load app configs
-	appConfigs, err := config.LoadAppConfigs(cfg)
-	if err != nil {
-		log.Printf("Failed to load app configs: %v", err)
-		appConfigs = make(models.AppConfigs)
-		config.SaveAppConfigs(cfg, appConfigs) // Create initial empty config
-	}
-
+	/*
+		appConfigs, err := config.LoadAppConfigs(cfg)
+		if err != nil {
+			log.Printf("Failed to load app configs: %v", err)
+			appConfigs = make(models.AppConfigs)
+			config.SaveAppConfigs(cfg, appConfigs) // Create initial empty config
+		}
+	*/
 	// Initialize admin server
-	adminServer := admin.New(cfg, appConfigs, certAuth)
+	adminServer, err := admin.New(cfg, certAuth)
+	if err != nil {
+		log.Fatalf("Failed to create admin server: %v\n", err)
+	}
 
 	// Start admin API server
 	adminServer.Start()
