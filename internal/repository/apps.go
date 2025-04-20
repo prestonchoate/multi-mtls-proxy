@@ -2,22 +2,24 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/prestonchoate/mtlsProxy/internal/db"
 	"github.com/prestonchoate/mtlsProxy/internal/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // AppRepository defines the interface for app config operations
 type AppRepository interface {
-	// TODO: might need to add owner ID to the CRUD operations if can't get it from context
 	GetAll(ctx context.Context, ownerId uuid.UUID) (map[string]models.AppConfig, error)
 	GetByID(ctx context.Context, appId string) (*models.AppConfig, error)
 	Create(ctx context.Context, app models.AppConfig) error
 	Update(ctx context.Context, app models.AppConfig) error
 	Delete(ctx context.Context, appId string) error
+	Upsert(ctx context.Context, app models.AppConfig) error
 }
 
 // MongoAppRepository implements AppRepository for MongoDB storage
@@ -74,6 +76,17 @@ func (r *MongoAppRepository) Update(ctx context.Context, app models.AppConfig) e
 	filter := bson.M{"appId": app.AppID}
 	update := bson.M{"$set": app}
 	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+// Upsert either modifies an existing app config or creates a new one if it does not exist
+func (r *MongoAppRepository) Upsert(ctx context.Context, app models.AppConfig) error {
+	app.UpdatedAt = time.Now()
+	filter := bson.M{"appId": app.AppID}
+	update := bson.M{"$set": app}
+	opts := options.Update().SetUpsert(true)
+	_, err := r.collection.UpdateOne(ctx, filter, update, opts)
+
 	return err
 }
 

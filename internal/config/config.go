@@ -105,6 +105,7 @@ func GetConfig() *models.Config {
 		MongoDB:              checkEnvVar[string]("MONGO_DB", defaults),
 		MongoAppsColl:        checkEnvVar[string]("MONGO_APPS_COLL", defaults),
 		MongoUsersColl:       checkEnvVar[string]("MONGO_USERS_COLL", defaults),
+		EncryptionKey:        checkEnvVar[string]("ENCRYPTION_KEY", defaults),
 	}
 
 	return configInstance
@@ -131,6 +132,7 @@ func getDefaultConfig() models.Config {
 		MongoDB:              "mtlsProxy",
 		MongoAppsColl:        "apps",
 		MongoUsersColl:       "users",
+		EncryptionKey:        "ybVYwwik+g8LWj2v8NH4auxxc8j5XFy8Gl8RXZe/HUCUPfwR2sP/eV/ouKIeZPsv",
 		Mapping: map[string]string{
 			"ADMIN_API_PORT":         "AdminAPIPort",
 			"PROXY_PORT":             "ProxyPort",

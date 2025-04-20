@@ -27,6 +27,7 @@ type Config struct {
 	MongoDB              string            `json:"mongoDB"`
 	MongoAppsColl        string            `json:"mongoAppsColl"`
 	MongoUsersColl       string            `json:"mongoUsersColl"`
+	EncryptionKey        string            `json:"encryptionKey"`
 	Mapping              map[string]string `json:"-"`
 }
 
@@ -52,10 +53,12 @@ type AppConfig struct {
 
 // ClientCertInfo holds information about the client certificate
 type ClientCertInfo struct {
-	CertFile    string    `json:"certFile"`
-	KeyFile     string    `json:"keyFile"`
-	Fingerprint string    `json:"fingerprint"`
-	ExpiresAt   time.Time `json:"expiresAt"`
+	CertFile        string    `json:"certFile"`
+	KeyFile         string    `json:"keyFile"`
+	CertPEM         string    `json:"certPEM,omitempty"`
+	EncryptedKeyPEM string    `json:"encryptedKeyPEM,omitempty"`
+	Fingerprint     string    `json:"fingerprint"`
+	ExpiresAt       time.Time `json:"expiresAt"`
 }
 
 type AdminUser struct {

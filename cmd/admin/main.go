@@ -26,15 +26,6 @@ func main() {
 		log.Fatalf("Failed to check/create admin signing cert: %v", err)
 	}
 
-	// Load app configs
-	/*
-		appConfigs, err := config.LoadAppConfigs(cfg)
-		if err != nil {
-			log.Printf("Failed to load app configs: %v", err)
-			appConfigs = make(models.AppConfigs)
-			config.SaveAppConfigs(cfg, appConfigs) // Create initial empty config
-		}
-	*/
 	// Initialize admin server
 	adminServer, err := admin.New(cfg, certAuth)
 	if err != nil {
