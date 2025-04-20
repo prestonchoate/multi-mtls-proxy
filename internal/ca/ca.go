@@ -1,6 +1,7 @@
 package ca
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -9,51 +10,54 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/prestonchoate/mtlsProxy/internal/config"
+	"github.com/prestonchoate/mtlsProxy/internal/db"
 	"github.com/prestonchoate/mtlsProxy/internal/models"
+	"github.com/prestonchoate/mtlsProxy/internal/repository"
 )
 
 // CertificateAuthority represents a CA for certificate operations
 type CertificateAuthority struct {
 	PrivateKey  *rsa.PrivateKey
 	Certificate *x509.Certificate
-	mutex       sync.Mutex
+	certRepo    repository.CertificateRepository
 }
 
 // New creates a new certificate authority
 func New() *CertificateAuthority {
-	return &CertificateAuthority{
-		mutex: sync.Mutex{},
-	}
+	return &CertificateAuthority{}
 }
 
 // Initialize initializes or loads the Certificate Authority
-func (ca *CertificateAuthority) Initialize(cfg *models.Config) error {
-	ca.mutex.Lock()
-	defer ca.mutex.Unlock()
+func (ca *CertificateAuthority) Initialize(cfg *models.Config, client *db.MongoClient) error {
+	if client == nil {
+		return fmt.Errorf("bad db client")
+	}
+
+	encKey, err := cfg.GetEncryptionKey()
+	if err != nil {
+		return err
+	}
+
+	ca.certRepo = repository.NewMongoCertificateRepository(client, cfg.MongoCertColl, string(encKey))
 
 	// Check if CA files exist
-	_, keyErr := os.Stat(cfg.CAKeyFile)
-	_, certErr := os.Stat(cfg.CACertFile)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	if os.IsNotExist(keyErr) || os.IsNotExist(certErr) {
+	certData, certErr := ca.certRepo.GetCert(ctx, cfg.CACertFile)
+	key, keyErr := ca.certRepo.GetKey(ctx, cfg.CAKeyFile)
+
+	if certErr != nil || keyErr != nil {
 		log.Println("CA files not found, creating new CA")
 		return ca.create(cfg)
 	}
 
 	// Load existing CA
-	keyBytes, err := os.ReadFile(cfg.CAKeyFile)
-	if err != nil {
-		return fmt.Errorf("failed to read CA key file: %w", err)
-	}
-
-	keyBlock, _ := pem.Decode(keyBytes)
+	keyBlock, _ := pem.Decode(key)
 	if keyBlock == nil {
 		return fmt.Errorf("failed to decode CA key PEM")
 	}
@@ -63,12 +67,7 @@ func (ca *CertificateAuthority) Initialize(cfg *models.Config) error {
 		return fmt.Errorf("failed to parse CA private key: %w", err)
 	}
 
-	certBytes, err := os.ReadFile(cfg.CACertFile)
-	if err != nil {
-		return fmt.Errorf("failed to read CA cert file: %w", err)
-	}
-
-	certBlock, _ := pem.Decode(certBytes)
+	certBlock, _ := pem.Decode(certData)
 	if certBlock == nil {
 		return fmt.Errorf("failed to decode CA cert PEM")
 	}
@@ -125,16 +124,13 @@ func (ca *CertificateAuthority) create(cfg *models.Config) error {
 		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
 	})
 
-	config.IOMutex.Lock()
-	if err := os.MkdirAll(filepath.Dir(cfg.CAKeyFile), 0755); err != nil {
-		config.IOMutex.Unlock()
-		return fmt.Errorf("failed to create CA key directory %s: %w", cfg.CAKeyFile, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err = ca.certRepo.SaveKey(ctx, cfg.CAKeyFile, keyPEM)
+	if err != nil {
+		return fmt.Errorf("failed to save CA Key: %w", err)
 	}
-	if err := os.WriteFile(cfg.CAKeyFile, keyPEM, 0600); err != nil {
-		config.IOMutex.Unlock()
-		return fmt.Errorf("failed to write CA key file to %s: %w", cfg.CAKeyFile, err)
-	}
-	config.IOMutex.Unlock()
 
 	// Save certificate to file
 	certPEM := pem.EncodeToMemory(&pem.Block{
@@ -142,12 +138,13 @@ func (ca *CertificateAuthority) create(cfg *models.Config) error {
 		Bytes: certBytes,
 	})
 
-	config.IOMutex.Lock()
-	if err := os.WriteFile(cfg.CACertFile, certPEM, 0644); err != nil {
-		config.IOMutex.Unlock()
-		return fmt.Errorf("failed to write CA cert file to %s: %w", cfg.CACertFile, err)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err = ca.certRepo.SaveCert(ctx, cfg.CACertFile, certPEM)
+	if err != nil {
+		return fmt.Errorf("failed to save CA Key: %w", err)
 	}
-	config.IOMutex.Unlock()
 
 	// Parse the created certificate for internal use
 	cert, err := x509.ParseCertificate(certBytes)
@@ -168,16 +165,9 @@ func (ca *CertificateAuthority) GenerateClientCertificate(appID string, cfg *mod
 		return models.ClientCertInfo{}, fmt.Errorf("bad app ID. cannot generate cert")
 	}
 
-	// Lock for certificate generation
-	certMutex := sync.Mutex{}
-	certMutex.Lock()
-	defer certMutex.Unlock()
-
 	// Use CA to sign
-	ca.mutex.Lock()
 	caCert := ca.Certificate
 	caKey := ca.PrivateKey
-	ca.mutex.Unlock()
 
 	// Create private key
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -224,32 +214,35 @@ func (ca *CertificateAuthority) GenerateClientCertificate(appID string, cfg *mod
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
 	})
-	keyFile := filepath.Join(cfg.CertDir, fmt.Sprintf("%s.key", appID))
+	keyName := filepath.Join(cfg.CertDir, fmt.Sprintf("%s.key", appID))
 
-	config.IOMutex.Lock()
-	if err := os.WriteFile(keyFile, keyPEM, 0600); err != nil {
-		config.IOMutex.Unlock()
-		return models.ClientCertInfo{}, fmt.Errorf("failed to write client key file: %w", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err = ca.certRepo.SaveKey(ctx, keyName, keyPEM)
+	if err != nil {
+		return models.ClientCertInfo{}, fmt.Errorf("failed to write client key: %w", err)
 	}
-	config.IOMutex.Unlock()
 
 	// Save certificate to file
 	certPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: certBytes,
 	})
-	certFile := filepath.Join(cfg.CertDir, fmt.Sprintf("%s.crt", appID))
+	certName := filepath.Join(cfg.CertDir, fmt.Sprintf("%s.crt", appID))
 
-	config.IOMutex.Lock()
-	if err := os.WriteFile(certFile, certPEM, 0644); err != nil {
-		config.IOMutex.Unlock()
-		return models.ClientCertInfo{}, fmt.Errorf("failed to write client cert file: %w", err)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err = ca.certRepo.SaveCert(ctx, certName, certPEM)
+
+	if err != nil {
+		return models.ClientCertInfo{}, fmt.Errorf("failed to write client cert: %w", err)
 	}
-	config.IOMutex.Unlock()
 
 	return models.ClientCertInfo{
-		CertFile:    certFile,
-		KeyFile:     keyFile,
+		CertFile:    certName,
+		KeyFile:     keyName,
 		Fingerprint: fingerprint,
 		ExpiresAt:   expiresAt,
 	}, nil
@@ -257,9 +250,6 @@ func (ca *CertificateAuthority) GenerateClientCertificate(appID string, cfg *mod
 
 // CreateProxyCert creates the proxy server certificate
 func (ca *CertificateAuthority) CreateProxyCert(cfg *models.Config) error {
-	ca.mutex.Lock()
-	defer ca.mutex.Unlock()
-
 	// Generate server private key
 	serverKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
@@ -298,10 +288,12 @@ func (ca *CertificateAuthority) CreateProxyCert(cfg *models.Config) error {
 		Bytes: serverCertDER,
 	})
 
-	config.IOMutex.Lock()
-	defer config.IOMutex.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	if err := os.WriteFile(cfg.ProxyServerCertFile, serverCertPEM, 0644); err != nil {
+	err = ca.certRepo.SaveCert(ctx, cfg.ProxyServerCertFile, serverCertPEM)
+
+	if err != nil {
 		return fmt.Errorf("failed to write server certificate file: %w", err)
 	}
 
@@ -311,7 +303,12 @@ func (ca *CertificateAuthority) CreateProxyCert(cfg *models.Config) error {
 		Bytes: x509.MarshalPKCS1PrivateKey(serverKey),
 	})
 
-	if err := os.WriteFile(cfg.ProxyServerKeyFile, serverKeyPEM, 0600); err != nil {
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err = ca.certRepo.SaveKey(ctx, cfg.ProxyServerKeyFile, serverKeyPEM)
+
+	if err != nil {
 		return fmt.Errorf("failed to write server key file: %w", err)
 	}
 
@@ -320,10 +317,13 @@ func (ca *CertificateAuthority) CreateProxyCert(cfg *models.Config) error {
 
 // CheckProxyCert checks if the proxy certificate exists, and creates it if it doesn't
 func (ca *CertificateAuthority) CheckProxyCert(cfg *models.Config) error {
-	_, err1 := os.Stat(cfg.ProxyServerCertFile)
-	_, err2 := os.Stat(cfg.ProxyServerKeyFile)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
 
-	if os.IsNotExist(err1) || os.IsNotExist(err2) {
+	_, err1 := ca.certRepo.GetCert(ctx, cfg.ProxyServerCertFile)
+	_, err2 := ca.certRepo.GetKey(ctx, cfg.ProxyServerKeyFile)
+
+	if err1 != nil || err2 != nil {
 		return ca.CreateProxyCert(cfg)
 	}
 
@@ -331,9 +331,6 @@ func (ca *CertificateAuthority) CheckProxyCert(cfg *models.Config) error {
 }
 
 func (ca *CertificateAuthority) CreateAdminSigningCert(cfg *models.Config) error {
-	ca.mutex.Lock()
-	defer ca.mutex.Unlock()
-
 	// Generate signing private key
 	signingKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
@@ -372,32 +369,71 @@ func (ca *CertificateAuthority) CreateAdminSigningCert(cfg *models.Config) error
 		Bytes: signingCertDER,
 	})
 
-	config.IOMutex.Lock()
-	defer config.IOMutex.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	if err := os.WriteFile(cfg.JWTSigningCertFile, signingCertPEM, 0644); err != nil {
-		return fmt.Errorf("failed to write signing certificate file: %w", err)
+	err = ca.certRepo.SaveCert(ctx, cfg.JWTSigningCertFile, signingCertPEM)
+
+	if err != nil {
+		return fmt.Errorf("failed to write signing certificate: %w", err)
 	}
 
 	// Save the signing key to file
-	serverKeyPEM := pem.EncodeToMemory(&pem.Block{
+	signingKeyPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(signingKey),
 	})
 
-	if err := os.WriteFile(cfg.JWTSigningKeyFile, serverKeyPEM, 0600); err != nil {
-		return fmt.Errorf("failed to write signing key file: %w", err)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err = ca.certRepo.SaveKey(ctx, cfg.JWTSigningKeyFile, signingKeyPEM)
+
+	if err != nil {
+		return fmt.Errorf("failed to write signing key: %w", err)
 	}
 
 	return nil
 }
 
 func (ca *CertificateAuthority) CheckAdminSigningCert(cfg *models.Config) error {
-	_, err1 := os.Stat(cfg.JWTSigningCertFile)
-	_, err2 := os.Stat(cfg.JWTSigningKeyFile)
+	log.Println("Checking admin signing cert/key bundle")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	if os.IsNotExist(err1) || os.IsNotExist(err2) {
+	_, err1 := ca.certRepo.GetCert(ctx, cfg.JWTSigningCertFile)
+	_, err2 := ca.certRepo.GetKey(ctx, cfg.JWTSigningKeyFile)
+
+	if err1 != nil || err2 != nil {
 		return ca.CreateAdminSigningCert(cfg)
 	}
 	return nil
+}
+
+func (ca *CertificateAuthority) GetKey(name string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	return ca.certRepo.GetKey(ctx, name)
+}
+
+func (ca *CertificateAuthority) GetCert(name string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	return ca.certRepo.GetCert(ctx, name)
+}
+
+func (ca *CertificateAuthority) RemoveCert(name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	return ca.certRepo.DeleteCert(ctx, name)
+}
+
+func (ca *CertificateAuthority) RemoveKey(name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	return ca.certRepo.DeleteKey(ctx, name)
 }

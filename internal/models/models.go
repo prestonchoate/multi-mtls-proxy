@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/base64"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,6 +28,7 @@ type Config struct {
 	MongoDB              string            `json:"mongoDB"`
 	MongoAppsColl        string            `json:"mongoAppsColl"`
 	MongoUsersColl       string            `json:"mongoUsersColl"`
+	MongoCertColl        string            `json:"mongoCertColl"`
 	EncryptionKey        string            `json:"encryptionKey"`
 	Mapping              map[string]string `json:"-"`
 }
@@ -38,6 +40,11 @@ func (c *Config) EnvVarToFieldName(envVar string) string {
 		return ""
 	}
 	return fieldName
+}
+
+// GetEncryptionKey decodes base64 encoded key and returns it as an array of bytes
+func (c *Config) GetEncryptionKey() ([]byte, error) {
+	return base64.StdEncoding.DecodeString(c.EncryptionKey)
 }
 
 // AppConfig represents an application configuration for proxying
@@ -72,3 +79,20 @@ type AdminUser struct {
 
 // AppConfigs is a map of appID to AppConfig
 type AppConfigs map[string]AppConfig
+
+type CertDataType string
+
+const (
+	Cert CertDataType = "cert"
+	Key  CertDataType = "key"
+)
+
+// TODO: Generate repository to persist this data to DB
+type CertData struct {
+	ID        primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
+	Name      string             `json:"name" bson:"name"`
+	Type      CertDataType       `json:"type" bson:"type"`
+	Data      string             `json:"data" bson:"data"`
+	CreatedAt time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt time.Time          `json:"updatedAt" bson:"updatedAt"`
+}

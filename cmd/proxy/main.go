@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 
 	"github.com/prestonchoate/mtlsProxy/internal/ca"
@@ -22,12 +21,9 @@ func main() {
 
 	appRepo := repository.NewMongoAppRepository(mongoClient, cfg.MongoAppsColl)
 
-	// Create necessary directories
-	config.CreateDirectories(cfg)
-
 	// Initialize certificate authority
 	certAuth := ca.New()
-	if err := certAuth.Initialize(cfg); err != nil {
+	if err := certAuth.Initialize(cfg, mongoClient); err != nil {
 		log.Fatalf("Failed to initialize CA: %v", err)
 	}
 
@@ -36,14 +32,8 @@ func main() {
 		log.Fatalf("Failed to check/create proxy certificates: %v", err)
 	}
 
-	// Load app configs
-	appConfigs, err := appRepo.GetFullCollection(context.Background())
-	if err != nil {
-		log.Fatalf("Failed to load app configs: %v", err)
-	}
-
 	// Initialize proxy server
-	proxyServer := proxy.New(cfg, appConfigs)
+	proxyServer := proxy.New(cfg, appRepo, *certAuth)
 
 	// Start proxy server
 	proxyServer.Start()

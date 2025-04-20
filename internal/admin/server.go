@@ -8,18 +8,16 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
-	"os"
+	"path"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/prestonchoate/mtlsProxy/internal/ca"
-	"github.com/prestonchoate/mtlsProxy/internal/config"
 	"github.com/prestonchoate/mtlsProxy/internal/db"
 	"github.com/prestonchoate/mtlsProxy/internal/models"
 	"github.com/prestonchoate/mtlsProxy/internal/repository"
@@ -263,7 +261,6 @@ func (s *Server) updateAppTargets(c *gin.Context) {
 	}
 
 	if app.Owner != adminUser.ID {
-		config.ConfigMutex.Unlock()
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -349,19 +346,20 @@ func (s *Server) deleteApp(c *gin.Context) {
 	}
 
 	// Delete cert files
-	config.IOMutex.Lock()
-	os.Remove(app.ClientCerts.CertFile)
-	os.Remove(app.ClientCerts.KeyFile)
-	config.IOMutex.Unlock()
+	err1 := s.ca.RemoveCert(app.ClientCerts.CertFile)
+	err2 := s.ca.RemoveKey(app.ClientCerts.KeyFile)
+
+	if err1 != nil || err2 != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Something went wrong"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "App deleted successfully"})
 }
 
 // Get CA certificate
 func (s *Server) getCACert(c *gin.Context) {
-	config.IOMutex.Lock()
-	certBytes, err := os.ReadFile(s.config.CACertFile)
-	config.IOMutex.Unlock()
+	certBytes, err := s.ca.GetCert(s.config.CACertFile)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read CA certificate"})
@@ -485,9 +483,9 @@ func (s *Server) generateAdminJwt(user *models.AdminUser) (string, error) {
 
 // Retrieve Signing Cert as RSA PublicKey
 func (s *Server) getSigningCert() (*rsa.PublicKey, error) {
-	val, err := os.ReadFile(s.config.JWTSigningCertFile)
+	val, err := s.ca.GetCert(s.config.JWTSigningCertFile)
 	if err != nil {
-		log.Println("failed to load signing cert from disk: ", err)
+		log.Println("failed to retrieve signing cert: ", err)
 		return nil, err
 	}
 
@@ -513,9 +511,9 @@ func (s *Server) getSigningCert() (*rsa.PublicKey, error) {
 
 // Retrieve Signing Key as RSA PrivateKey
 func (s *Server) getSigningKey() (*rsa.PrivateKey, error) {
-	val, err := os.ReadFile(s.config.JWTSigningKeyFile)
+	val, err := s.ca.GetKey(s.config.JWTSigningKeyFile)
 	if err != nil {
-		log.Println("failed to load signing key from disk: ", err)
+		log.Println("failed to retrieve signing key: ", err)
 		return nil, err
 	}
 
@@ -578,21 +576,20 @@ func (s *Server) downloadAppCertBundle(c *gin.Context) {
 	}
 
 	if app.Owner != adminUser.ID {
-		config.ConfigMutex.Unlock()
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	files := []string{
-		app.ClientCerts.CertFile,
-		app.ClientCerts.KeyFile,
+	files := map[models.CertDataType]string{
+		models.Cert: app.ClientCerts.CertFile,
+		models.Key:  app.ClientCerts.KeyFile,
 	}
 
 	var buf bytes.Buffer
 	zipWriter := zip.NewWriter(&buf)
 
-	for _, file := range files {
-		err := s.addFileToZip(zipWriter, file)
+	for fileType, file := range files {
+		err := s.addFileToZip(zipWriter, file, fileType)
 		if err != nil {
 			zipWriter.Close()
 			log.Printf("something went wrong adding file to zip: %s\n", err)
@@ -612,30 +609,30 @@ func (s *Server) downloadAppCertBundle(c *gin.Context) {
 }
 
 // Helper function to add files to zip
-func (s *Server) addFileToZip(zipWriter *zip.Writer, filePath string) error {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil {
-		return err
+func (s *Server) addFileToZip(zipWriter *zip.Writer, filePath string, fileType models.CertDataType) error {
+	var file []byte
+	var err error
+	if fileType == models.Cert {
+		file, err = s.ca.GetCert(filePath)
+	} else {
+		file, err = s.ca.GetKey(filePath)
 	}
 
-	header, err := zip.FileInfoHeader(info)
 	if err != nil {
 		return err
 	}
-	header.Name = info.Name()
-	header.Method = zip.Deflate
+
+	name := path.Base(filePath)
+	header := &zip.FileHeader{
+		Name:   name,
+		Method: zip.Deflate,
+	}
 
 	writer, err := zipWriter.CreateHeader(header)
 	if err != nil {
 		return err
 	}
 
-	_, err = io.Copy(writer, file)
+	_, err = writer.Write(file)
 	return err
 }

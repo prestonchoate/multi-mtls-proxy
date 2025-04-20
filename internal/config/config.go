@@ -3,22 +3,14 @@ package config
 import (
 	"log"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strconv"
-	"sync"
 
 	"github.com/joho/godotenv"
 	"github.com/prestonchoate/mtlsProxy/internal/models"
 )
 
 var (
-	// ConfigMutex synchronizes access to the configuration
-	ConfigMutex sync.RWMutex
-
-	// IOMutex synchronizes file operations
-	IOMutex sync.Mutex
-
 	configInstance *models.Config
 )
 
@@ -102,6 +94,7 @@ func GetConfig() *models.Config {
 		MongoAppsColl:        checkEnvVar[string]("MONGO_APPS_COLL", defaults),
 		MongoUsersColl:       checkEnvVar[string]("MONGO_USERS_COLL", defaults),
 		EncryptionKey:        checkEnvVar[string]("ENCRYPTION_KEY", defaults),
+		MongoCertColl:        checkEnvVar[string]("MONGO_CERT_COLL", defaults),
 	}
 
 	return configInstance
@@ -128,7 +121,8 @@ func getDefaultConfig() models.Config {
 		MongoDB:              "mtlsProxy",
 		MongoAppsColl:        "apps",
 		MongoUsersColl:       "users",
-		EncryptionKey:        "ybVYwwik+g8LWj2v8NH4auxxc8j5XFy8Gl8RXZe/HUCUPfwR2sP/eV/ouKIeZPsv",
+		MongoCertColl:        "certs",
+		EncryptionKey:        "rTdRG79RqfXnHVIrPui3d4qW7qaF/uVQj5VnkWb96KQ=",
 		Mapping: map[string]string{
 			"ADMIN_API_PORT":         "AdminAPIPort",
 			"PROXY_PORT":             "ProxyPort",
@@ -146,14 +140,4 @@ func getDefaultConfig() models.Config {
 			"JWT_SIGNING_CERT_FILE":  "JWTSigningCertFile",
 		},
 	}
-}
-
-// CreateDirectories creates necessary directories
-func CreateDirectories(config *models.Config) {
-	IOMutex.Lock()
-	defer IOMutex.Unlock()
-
-	os.MkdirAll(config.CertDir, 0755)
-	os.MkdirAll(filepath.Dir(config.CAKeyFile), 0755)
-	os.MkdirAll(filepath.Dir(config.ConfigFile), 0755)
 }

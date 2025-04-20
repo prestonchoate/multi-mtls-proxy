@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -8,24 +9,38 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
+	"time"
 
-	"github.com/prestonchoate/mtlsProxy/internal/config"
+	"github.com/prestonchoate/mtlsProxy/internal/ca"
 	"github.com/prestonchoate/mtlsProxy/internal/models"
+	"github.com/prestonchoate/mtlsProxy/internal/repository"
 )
 
 // Server represents the proxy server
 type Server struct {
-	config     *models.Config
-	appConfigs models.AppConfigs
+	config        *models.Config
+	appConfigs    models.AppConfigs
+	appRepo       repository.AppRepository
+	certAuthority ca.CertificateAuthority
 }
 
 // New creates a new proxy server
-func New(cfg *models.Config, appCfgs models.AppConfigs) *Server {
-	return &Server{
-		config:     cfg,
-		appConfigs: appCfgs,
+func New(cfg *models.Config, appRepo repository.AppRepository, certAuthority ca.CertificateAuthority) *Server {
+	s := &Server{
+		config:        cfg,
+		certAuthority: certAuthority,
+		appRepo:       appRepo,
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var err error
+	s.appConfigs, err = s.appRepo.GetFullCollection(ctx)
+	if err != nil {
+		log.Fatalf("Failed to retrieve app config: %v", err)
+	}
+
+	return s
 }
 
 // Start starts the proxy server
@@ -33,9 +48,7 @@ func (s *Server) Start() {
 	// Create a CA cert pool for client authentication
 	caCertPool := x509.NewCertPool()
 
-	config.IOMutex.Lock()
-	caCert, err := os.ReadFile(s.config.CACertFile)
-	config.IOMutex.Unlock()
+	caCert, err := s.certAuthority.GetCert(s.config.CACertFile)
 
 	if err != nil {
 		log.Fatalf("Failed to read CA certificate: %v", err)
@@ -44,9 +57,10 @@ func (s *Server) Start() {
 
 	// Create TLS config
 	tlsConfig := &tls.Config{
-		ClientAuth: tls.RequireAndVerifyClientCert,
-		ClientCAs:  caCertPool,
-		MinVersion: tls.VersionTLS12,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    caCertPool,
+		MinVersion:   tls.VersionTLS12,
+		Certificates: []tls.Certificate{},
 	}
 
 	// Create server
@@ -58,7 +72,20 @@ func (s *Server) Start() {
 
 	// Start the server
 	log.Printf("Starting proxy server on port %d", s.config.ProxyPort)
-	if err := server.ListenAndServeTLS(s.config.ProxyServerCertFile, s.config.ProxyServerKeyFile); err != nil {
+	cert, certErr := s.certAuthority.GetCert(s.config.ProxyServerCertFile)
+	key, keyErr := s.certAuthority.GetKey(s.config.ProxyServerKeyFile)
+	if keyErr != nil || certErr != nil {
+		log.Fatalf("Problem getting cert or key for proxy server. Cert err: %v\tKey Err: %v", certErr, keyErr)
+	}
+
+	tlsCert, err := tls.X509KeyPair(cert, key)
+	if err != nil {
+		log.Fatalf("failed to load key pair: %v", err)
+	}
+
+	server.TLSConfig.Certificates = append(server.TLSConfig.Certificates, tlsCert)
+
+	if err := server.ListenAndServeTLS("", ""); err != nil {
 		log.Fatalf("Failed to start proxy server: %v", err)
 	}
 }
@@ -74,9 +101,7 @@ func (s *Server) proxyHandler(w http.ResponseWriter, r *http.Request) {
 	clientAppID := clientCert.Subject.CommonName
 
 	// Find app config
-	config.ConfigMutex.RLock()
 	app, exists := s.appConfigs[clientAppID]
-	config.ConfigMutex.RUnlock()
 
 	if !exists {
 		http.Error(w, "Unknown client", http.StatusUnauthorized)
