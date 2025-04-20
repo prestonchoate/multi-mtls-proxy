@@ -48,8 +48,8 @@ func (ca *CertificateAuthority) Initialize(cfg *models.Config, client *db.MongoC
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	certData, certErr := ca.certRepo.GetCert(ctx, cfg.CACertFile)
-	key, keyErr := ca.certRepo.GetKey(ctx, cfg.CAKeyFile)
+	certData, certErr := ca.certRepo.GetCert(ctx, cfg.CACertName)
+	key, keyErr := ca.certRepo.GetKey(ctx, cfg.CAKeyName)
 
 	if certErr != nil || keyErr != nil {
 		log.Println("CA files not found, creating new CA")
@@ -127,7 +127,7 @@ func (ca *CertificateAuthority) create(cfg *models.Config) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err = ca.certRepo.SaveKey(ctx, cfg.CAKeyFile, keyPEM)
+	err = ca.certRepo.SaveKey(ctx, cfg.CAKeyName, keyPEM)
 	if err != nil {
 		return fmt.Errorf("failed to save CA Key: %w", err)
 	}
@@ -141,7 +141,7 @@ func (ca *CertificateAuthority) create(cfg *models.Config) error {
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err = ca.certRepo.SaveCert(ctx, cfg.CACertFile, certPEM)
+	err = ca.certRepo.SaveCert(ctx, cfg.CACertName, certPEM)
 	if err != nil {
 		return fmt.Errorf("failed to save CA Key: %w", err)
 	}
@@ -291,7 +291,7 @@ func (ca *CertificateAuthority) CreateProxyCert(cfg *models.Config) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err = ca.certRepo.SaveCert(ctx, cfg.ProxyServerCertFile, serverCertPEM)
+	err = ca.certRepo.SaveCert(ctx, cfg.ProxyServerCertName, serverCertPEM)
 
 	if err != nil {
 		return fmt.Errorf("failed to write server certificate file: %w", err)
@@ -306,7 +306,7 @@ func (ca *CertificateAuthority) CreateProxyCert(cfg *models.Config) error {
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err = ca.certRepo.SaveKey(ctx, cfg.ProxyServerKeyFile, serverKeyPEM)
+	err = ca.certRepo.SaveKey(ctx, cfg.ProxyServerKeyName, serverKeyPEM)
 
 	if err != nil {
 		return fmt.Errorf("failed to write server key file: %w", err)
@@ -320,8 +320,8 @@ func (ca *CertificateAuthority) CheckProxyCert(cfg *models.Config) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	_, err1 := ca.certRepo.GetCert(ctx, cfg.ProxyServerCertFile)
-	_, err2 := ca.certRepo.GetKey(ctx, cfg.ProxyServerKeyFile)
+	_, err1 := ca.certRepo.GetCert(ctx, cfg.ProxyServerCertName)
+	_, err2 := ca.certRepo.GetKey(ctx, cfg.ProxyServerKeyName)
 
 	if err1 != nil || err2 != nil {
 		return ca.CreateProxyCert(cfg)
@@ -372,7 +372,7 @@ func (ca *CertificateAuthority) CreateAdminSigningCert(cfg *models.Config) error
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err = ca.certRepo.SaveCert(ctx, cfg.JWTSigningCertFile, signingCertPEM)
+	err = ca.certRepo.SaveCert(ctx, cfg.JWTSigningCertName, signingCertPEM)
 
 	if err != nil {
 		return fmt.Errorf("failed to write signing certificate: %w", err)
@@ -387,7 +387,7 @@ func (ca *CertificateAuthority) CreateAdminSigningCert(cfg *models.Config) error
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err = ca.certRepo.SaveKey(ctx, cfg.JWTSigningKeyFile, signingKeyPEM)
+	err = ca.certRepo.SaveKey(ctx, cfg.JWTSigningKeyName, signingKeyPEM)
 
 	if err != nil {
 		return fmt.Errorf("failed to write signing key: %w", err)
@@ -401,8 +401,8 @@ func (ca *CertificateAuthority) CheckAdminSigningCert(cfg *models.Config) error 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err1 := ca.certRepo.GetCert(ctx, cfg.JWTSigningCertFile)
-	_, err2 := ca.certRepo.GetKey(ctx, cfg.JWTSigningKeyFile)
+	_, err1 := ca.certRepo.GetCert(ctx, cfg.JWTSigningCertName)
+	_, err2 := ca.certRepo.GetKey(ctx, cfg.JWTSigningKeyName)
 
 	if err1 != nil || err2 != nil {
 		return ca.CreateAdminSigningCert(cfg)

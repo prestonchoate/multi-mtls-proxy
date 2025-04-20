@@ -48,7 +48,7 @@ func (s *Server) Start() {
 	// Create a CA cert pool for client authentication
 	caCertPool := x509.NewCertPool()
 
-	caCert, err := s.certAuthority.GetCert(s.config.CACertFile)
+	caCert, err := s.certAuthority.GetCert(s.config.CACertName)
 
 	if err != nil {
 		log.Fatalf("Failed to read CA certificate: %v", err)
@@ -72,8 +72,8 @@ func (s *Server) Start() {
 
 	// Start the server
 	log.Printf("Starting proxy server on port %d", s.config.ProxyPort)
-	cert, certErr := s.certAuthority.GetCert(s.config.ProxyServerCertFile)
-	key, keyErr := s.certAuthority.GetKey(s.config.ProxyServerKeyFile)
+	cert, certErr := s.certAuthority.GetCert(s.config.ProxyServerCertName)
+	key, keyErr := s.certAuthority.GetKey(s.config.ProxyServerKeyName)
 	if keyErr != nil || certErr != nil {
 		log.Fatalf("Problem getting cert or key for proxy server. Cert err: %v\tKey Err: %v", certErr, keyErr)
 	}

@@ -50,33 +50,27 @@ No official Docker image yet
 
 ## Configuration
 
-### Basic Configuration File
-Upon startup the server will check for the existence of the following directories
-
-- `./ca/`
-- `./certs/`
-- `./config/`
-
-If they do not exist they will be created. Required CA cert and key will be created as well as the server's TLS Cert and Key. The Root CA will exist in the `./ca/` directory. The server's TLS cert and key will be at `./certs/server.crt` and `./certs/server.key` respectively.
-
-
 ### Environment Variables
-The proxy can also be configured using environment variables:
+Both the admin API and proxy can be configured using environment variables:
 
 - `ADMIN_API_PORT`: Admin Server Port (default: `8080`)
 - `PROXY_PORT`: Server port (default: `8443`)
-- `CERT_DIR`: Directory to store certificate files and keys (default: `./certs/`)
-- `CA_KEY_FILE`: Path to Root CA key file (default: `./ca/ca.key`)
-- `CA_CERT_FILE`: Path to Root CA Cert file (default: `./ca/ca.crt`)
-- `PROXY_SERVER_CERT_FILE`: Path to server certificate (default: `./certs/server.crt`)
-- `PROXY_SERVER_KEY_FILE`: Path to server private key (default: `./certs/server.key`)
-- `CONFIG_FILE`: Path to app conifg file (default: `./config/apps.json`)
-- `CERT_VALIDITY_DAYS`: Number to days to issue client certificates for (default: `365`)
+- `CA_KEY_NAME`: Path to Root CA key file (default: `ca/ca.key`)
+- `CA_CERT_NAME`: Path to Root CA Cert file (default: `ca/ca.crt`)
+- `PROXY_SERVER_CERT_NAME`: Path to server certificate (default: `proxy/server.crt`)
+- `PROXY_SERVER_KEY_NAME`: Path to server private key (default: `proxy/server.key`)
+- `CERT_VALIDITY_DAYS`: Number of days to issue client certificates for (default: `365`)
 - `HOSTNAME`: Hostname for the server (default: `localhost`)
 - `DEFAULT_ADMIN_USER`: Default admin username (default: `admin`)
 - `DEFAULT_ADMIN_PASSWORD`: Default admin password (default: `password`)
-- `JWT_SIGNING_KEY_FILE`: Path to admin JWT signing key (default `./certs/admin.key`)
-- `JWT_SIGNING_CERT_FILE`: Path to admin JWT signing cert (default `./certs/admin.crt`)
+- `JWT_SIGNING_KEY_NAME`: Path to admin JWT signing key (default: `admin/signing.key`)
+- `JWT_SIGNING_CERT_NAME`: Path to admin JWT signing cert (default: `admin/signing.crt`)
+- `MONGO_URI`: MongoDB connection string (default: `mongodb://localhost:27017`)
+- `MONGO_DB`: MongoDB database name (default: `mtlsAdmin`)
+- `MONGO_APPS_COLL`: MongoDB collection for apps (default: `apps`)
+- `MONGO_USERS_COLL`: MongoDB collection for users (default: `users`)
+- `MONGO_CERT_COLL`: MongoDB collection for certificates (default: `certs`)
+- `ENCRYPTION_KEY`: Encryption key for sensitive data (default: `rTdRG79RqfXnHVIrPui3d4qW7qaF/uVQj5VnkWb96KQ=`)
 
 The repository provides a `.env.dist` with these default values. It is not required to copy this into a `.env` file, but if you choose to change any configs you may do so with that method. 
 
@@ -137,7 +131,7 @@ curl --cert client.crt --key client.key --cacert ca.crt https://proxy.example.co
 
 
 ## Architecture
-[TODO: Diagram or description of the architecture]
+![mTLS system architecture diagram](./docs/mTLS%20Proxy%20System%20Diagram.png)
 
 See [Roadmap](./docs/roadmap.md) for future considerations
 

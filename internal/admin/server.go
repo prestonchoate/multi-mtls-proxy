@@ -359,7 +359,7 @@ func (s *Server) deleteApp(c *gin.Context) {
 
 // Get CA certificate
 func (s *Server) getCACert(c *gin.Context) {
-	certBytes, err := s.ca.GetCert(s.config.CACertFile)
+	certBytes, err := s.ca.GetCert(s.config.CACertName)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read CA certificate"})
@@ -483,7 +483,7 @@ func (s *Server) generateAdminJwt(user *models.AdminUser) (string, error) {
 
 // Retrieve Signing Cert as RSA PublicKey
 func (s *Server) getSigningCert() (*rsa.PublicKey, error) {
-	val, err := s.ca.GetCert(s.config.JWTSigningCertFile)
+	val, err := s.ca.GetCert(s.config.JWTSigningCertName)
 	if err != nil {
 		log.Println("failed to retrieve signing cert: ", err)
 		return nil, err
@@ -511,7 +511,7 @@ func (s *Server) getSigningCert() (*rsa.PublicKey, error) {
 
 // Retrieve Signing Key as RSA PrivateKey
 func (s *Server) getSigningKey() (*rsa.PrivateKey, error) {
-	val, err := s.ca.GetKey(s.config.JWTSigningKeyFile)
+	val, err := s.ca.GetKey(s.config.JWTSigningKeyName)
 	if err != nil {
 		log.Println("failed to retrieve signing key: ", err)
 		return nil, err
