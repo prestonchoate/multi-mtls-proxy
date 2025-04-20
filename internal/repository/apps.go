@@ -15,6 +15,7 @@ import (
 // AppRepository defines the interface for app config operations
 type AppRepository interface {
 	GetAll(ctx context.Context, ownerId uuid.UUID) (map[string]models.AppConfig, error)
+	GetFullCollection(ctx context.Context) (map[string]models.AppConfig, error)
 	GetByID(ctx context.Context, appId string) (*models.AppConfig, error)
 	Create(ctx context.Context, app models.AppConfig) error
 	Update(ctx context.Context, app models.AppConfig) error
@@ -38,6 +39,26 @@ func NewMongoAppRepository(client *db.MongoClient, collName string) *MongoAppRep
 func (r *MongoAppRepository) GetAll(ctx context.Context, ownerID uuid.UUID) (map[string]models.AppConfig, error) {
 	filter := bson.M{"owner": ownerID}
 	cursor, err := r.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	result := make(map[string]models.AppConfig)
+	for cursor.Next(ctx) {
+		var app models.AppConfig
+		if err := cursor.Decode(&app); err != nil {
+			return nil, err
+		}
+		result[app.AppID] = app
+	}
+
+	return result, nil
+}
+
+// GetFullCollection retrieves all apps. Should only be used for loading in-memory data for proxy server
+func (r *MongoAppRepository) GetFullCollection(ctx context.Context) (map[string]models.AppConfig, error) {
+	cursor, err := r.collection.Find(ctx, bson.M{})
 	if err != nil {
 		return nil, err
 	}

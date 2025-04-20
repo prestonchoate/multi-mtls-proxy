@@ -70,5 +70,5 @@ type AdminUser struct {
 	LastLogin    time.Time `json:"lastLogin" bson:"lastLogin"`
 }
 
-// AppConfigs is a map of appID to AppConfig TODO: Convert this to persistent storage instead of file based
+// AppConfigs is a map of appID to AppConfig
 type AppConfigs map[string]AppConfig
