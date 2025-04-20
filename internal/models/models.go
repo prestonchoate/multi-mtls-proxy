@@ -12,18 +12,16 @@ import (
 type Config struct {
 	AdminAPIPort         int               `json:"adminApiPort"`
 	ProxyPort            int               `json:"proxyPort"`
-	CertDir              string            `json:"certDir"`
-	CAKeyFile            string            `json:"caKeyFile"`
-	CACertFile           string            `json:"caCertFile"`
-	ProxyServerCertFile  string            `json:"proxyServerCertFile"`
-	ProxyServerKeyFile   string            `json:"proxyServerKeyFile"`
-	ConfigFile           string            `json:"configFile"`
+	CAKeyName            string            `json:"caKeyFile"`
+	CACertName           string            `json:"caCertFile"`
+	ProxyServerCertName  string            `json:"proxyServerCertFile"`
+	ProxyServerKeyName   string            `json:"proxyServerKeyFile"`
 	CertValidityDays     int               `json:"certValidityDays"`
 	HostName             string            `json:"hostname"`
 	DefaultAdminUser     string            `json:"defaultAdminUser"`
 	DefaultAdminPassword string            `json:"-"`
-	JWTSigningCertFile   string            `json:"jwtSigningCertFile"`
-	JWTSigningKeyFile    string            `json:"jwtSigningKeyFile"`
+	JWTSigningCertName   string            `json:"jwtSigningCertFile"`
+	JWTSigningKeyName    string            `json:"jwtSigningKeyFile"`
 	MongoURI             string            `json:"mongoURI"`
 	MongoDB              string            `json:"mongoDB"`
 	MongoAppsColl        string            `json:"mongoAppsColl"`
@@ -87,7 +85,6 @@ const (
 	Key  CertDataType = "key"
 )
 
-// TODO: Generate repository to persist this data to DB
 type CertData struct {
 	ID        primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
 	Name      string             `json:"name" bson:"name"`
