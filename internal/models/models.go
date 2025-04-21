@@ -1,27 +1,33 @@
 package models
 
 import (
+	"encoding/base64"
 	"time"
 
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // Config represents the application configuration
 type Config struct {
 	AdminAPIPort         int               `json:"adminApiPort"`
 	ProxyPort            int               `json:"proxyPort"`
-	CertDir              string            `json:"certDir"`
-	CAKeyFile            string            `json:"caKeyFile"`
-	CACertFile           string            `json:"caCertFile"`
-	ProxyServerCertFile  string            `json:"proxyServerCertFile"`
-	ProxyServerKeyFile   string            `json:"proxyServerKeyFile"`
-	ConfigFile           string            `json:"configFile"`
+	CAKeyName            string            `json:"caKeyFile"`
+	CACertName           string            `json:"caCertFile"`
+	ProxyServerCertName  string            `json:"proxyServerCertFile"`
+	ProxyServerKeyName   string            `json:"proxyServerKeyFile"`
 	CertValidityDays     int               `json:"certValidityDays"`
 	HostName             string            `json:"hostname"`
 	DefaultAdminUser     string            `json:"defaultAdminUser"`
 	DefaultAdminPassword string            `json:"-"`
-	JWTSigningCertFile   string            `json:"jwtSigningCertFile"`
-	JWTSigningKeyFile    string            `json:"jwtSigningKeyFile"`
+	JWTSigningCertName   string            `json:"jwtSigningCertFile"`
+	JWTSigningKeyName    string            `json:"jwtSigningKeyFile"`
+	MongoURI             string            `json:"mongoURI"`
+	MongoDB              string            `json:"mongoDB"`
+	MongoAppsColl        string            `json:"mongoAppsColl"`
+	MongoUsersColl       string            `json:"mongoUsersColl"`
+	MongoCertColl        string            `json:"mongoCertColl"`
+	EncryptionKey        string            `json:"encryptionKey"`
 	Mapping              map[string]string `json:"-"`
 }
 
@@ -34,32 +40,54 @@ func (c *Config) EnvVarToFieldName(envVar string) string {
 	return fieldName
 }
 
+// GetEncryptionKey decodes base64 encoded key and returns it as an array of bytes
+func (c *Config) GetEncryptionKey() ([]byte, error) {
+	return base64.StdEncoding.DecodeString(c.EncryptionKey)
+}
+
 // AppConfig represents an application configuration for proxying
 type AppConfig struct {
-	AppID       string            `json:"appId"`
-	TargetURLs  map[string]string `json:"targetUrls"` // path prefix -> target URL
-	ClientCerts ClientCertInfo    `json:"clientCerts"`
-	Owner       uuid.UUID         `json:"owner"`
-	Created     time.Time         `json:"created"`
-	Updated     time.Time         `json:"updated"`
+	ID          primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
+	AppID       string             `json:"appId" bson:"appId"`
+	TargetURLs  map[string]string  `json:"targetUrls" bson:"targetUrls"` // path prefix -> target URL
+	ClientCerts ClientCertInfo     `json:"clientCerts" bson:"clientCerts"`
+	Owner       uuid.UUID          `json:"owner" bson:"owner"`
+	CreatedAt   time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt   time.Time          `json:"updatedAt" bson:"updatedAt"`
 }
 
 // ClientCertInfo holds information about the client certificate
 type ClientCertInfo struct {
-	CertFile    string    `json:"certFile"`
-	KeyFile     string    `json:"keyFile"`
-	Fingerprint string    `json:"fingerprint"`
-	ExpiresAt   time.Time `json:"expiresAt"`
+	CertFile    string    `json:"certFile" bson:"certFile"`
+	KeyFile     string    `json:"keyFile" bson:"keyFile"`
+	Fingerprint string    `json:"fingerprint" bson:"fingerprint"`
+	ExpiresAt   time.Time `json:"expiresAt" bson:"expiresAt"`
 }
 
 type AdminUser struct {
-	ID           uuid.UUID `json:"id"`
-	UserName     string    `json:"userName"`
-	PasswordHash string    `json:"-"`
+	ID           uuid.UUID `json:"id" bson:"id"`
+	UserName     string    `json:"userName" bson:"userName"`
+	PasswordHash string    `json:"-" bson:"passwordHash"`
+	CreatedAt    time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt" bson:"updatedAt"`
+	LastLogin    time.Time `json:"lastLogin" bson:"lastLogin"`
 }
 
-// AppConfigs is a map of appID to AppConfig TODO: Convert this to persistent storage instead of file based
+// AppConfigs is a map of appID to AppConfig
 type AppConfigs map[string]AppConfig
 
-// AdminUsers is a map of AdminUser.ID to *AdminUser TODO: Convert this to persistent storage
-type AdminUsers map[uuid.UUID]*AdminUser
+type CertDataType string
+
+const (
+	Cert CertDataType = "cert"
+	Key  CertDataType = "key"
+)
+
+type CertData struct {
+	ID        primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
+	Name      string             `json:"name" bson:"name"`
+	Type      CertDataType       `json:"type" bson:"type"`
+	Data      string             `json:"data" bson:"data"`
+	CreatedAt time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt time.Time          `json:"updatedAt" bson:"updatedAt"`
+}

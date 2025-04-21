@@ -1,28 +1,16 @@
 package config
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strconv"
-	"sync"
-
-	"maps"
 
 	"github.com/joho/godotenv"
 	"github.com/prestonchoate/mtlsProxy/internal/models"
 )
 
 var (
-	// ConfigMutex synchronizes access to the configuration
-	ConfigMutex sync.RWMutex
-
-	// IOMutex synchronizes file operations
-	IOMutex sync.Mutex
-
 	configInstance *models.Config
 )
 
@@ -89,18 +77,22 @@ func GetConfig() *models.Config {
 	configInstance = &models.Config{
 		AdminAPIPort:         checkEnvVar[int]("ADMIN_API_PORT", defaults),
 		ProxyPort:            checkEnvVar[int]("PROXY_PORT", defaults),
-		CertDir:              checkEnvVar[string]("CERT_DIR", defaults),
-		CAKeyFile:            checkEnvVar[string]("CA_KEY_FILE", defaults),
-		CACertFile:           checkEnvVar[string]("CA_CERT_FILE", defaults),
-		ProxyServerCertFile:  checkEnvVar[string]("PROXY_SERVER_CERT_FILE", defaults),
-		ProxyServerKeyFile:   checkEnvVar[string]("PROXY_SERVER_KEY_FILE", defaults),
-		ConfigFile:           checkEnvVar[string]("CONFIG_FILE", defaults),
+		CAKeyName:            checkEnvVar[string]("CA_KEY_NAME", defaults),
+		CACertName:           checkEnvVar[string]("CA_CERT_NAME", defaults),
+		ProxyServerCertName:  checkEnvVar[string]("PROXY_SERVER_CERT_NAME", defaults),
+		ProxyServerKeyName:   checkEnvVar[string]("PROXY_SERVER_KEY_NAME", defaults),
 		CertValidityDays:     checkEnvVar[int]("CERT_VALIDITY_DAYS", defaults),
 		HostName:             checkEnvVar[string]("HOSTNAME", defaults),
 		DefaultAdminUser:     checkEnvVar[string]("DEFAULT_ADMIN_USER", defaults),
 		DefaultAdminPassword: checkEnvVar[string]("DEFAULT_ADMIN_PASSWORD", defaults),
-		JWTSigningKeyFile:    checkEnvVar[string]("JWT_SIGNING_KEY_FILE", defaults),
-		JWTSigningCertFile:   checkEnvVar[string]("JWT_SIGNING_CERT_FILE", defaults),
+		JWTSigningKeyName:    checkEnvVar[string]("JWT_SIGNING_KEY_NAME", defaults),
+		JWTSigningCertName:   checkEnvVar[string]("JWT_SIGNING_CERT_NAME", defaults),
+		MongoURI:             checkEnvVar[string]("MONGO_URI", defaults),
+		MongoDB:              checkEnvVar[string]("MONGO_DB", defaults),
+		MongoAppsColl:        checkEnvVar[string]("MONGO_APPS_COLL", defaults),
+		MongoUsersColl:       checkEnvVar[string]("MONGO_USERS_COLL", defaults),
+		EncryptionKey:        checkEnvVar[string]("ENCRYPTION_KEY", defaults),
+		MongoCertColl:        checkEnvVar[string]("MONGO_CERT_COLL", defaults),
 	}
 
 	return configInstance
@@ -111,98 +103,41 @@ func getDefaultConfig() models.Config {
 	return models.Config{
 		AdminAPIPort:         8080,
 		ProxyPort:            8443,
-		CertDir:              "./certs",
-		CAKeyFile:            "./ca/ca.key",
-		CACertFile:           "./ca/ca.crt",
-		ProxyServerCertFile:  "./certs/server.crt",
-		ProxyServerKeyFile:   "./certs/server.key",
-		ConfigFile:           "./config/apps.json",
+		CAKeyName:            "ca/ca.key",
+		CACertName:           "ca/ca.crt",
+		ProxyServerCertName:  "proxy/server.crt",
+		ProxyServerKeyName:   "proxy/server.key",
 		CertValidityDays:     365,
 		HostName:             "localhost",
 		DefaultAdminUser:     "admin",
 		DefaultAdminPassword: "password",
-		JWTSigningKeyFile:    "./certs/admin.key",
-		JWTSigningCertFile:   "./certs/admin.crt",
+		JWTSigningKeyName:    "admin/signing.key",
+		JWTSigningCertName:   "admin/signing.crt",
+		MongoURI:             "mongodb://localhost:27017",
+		MongoDB:              "mtlsProxy",
+		MongoAppsColl:        "apps",
+		MongoUsersColl:       "users",
+		MongoCertColl:        "certs",
+		EncryptionKey:        "rTdRG79RqfXnHVIrPui3d4qW7qaF/uVQj5VnkWb96KQ=",
 		Mapping: map[string]string{
 			"ADMIN_API_PORT":         "AdminAPIPort",
 			"PROXY_PORT":             "ProxyPort",
-			"CERT_DIR":               "CertDir",
-			"CA_KEY_FILE":            "CAKeyFile",
-			"CA_CERT_FILE":           "CACertFile",
-			"PROXY_SERVER_CERT_FILE": "ProxyServerCertFile",
-			"PROXY_SERVER_KEY_FILE":  "ProxyServerKeyFile",
-			"CONFIG_FILE":            "ConfigFile",
+			"CA_KEY_NAME":            "CAKeyName",
+			"CA_CERT_NAME":           "CACertName",
+			"PROXY_SERVER_CERT_NAME": "ProxyServerCertName",
+			"PROXY_SERVER_KEY_NAME":  "ProxyServerKeyName",
 			"CERT_VALIDITY_DAYS":     "CertValidityDays",
 			"HOSTNAME":               "HostName",
 			"DEFAULT_ADMIN_USER":     "DefaultAdminUser",
 			"DEFAULT_ADMIN_PASSWORD": "DefaultAdminPassword",
-			"JWT_SIGNING_KEY_FILE":   "JWTSigningKeyFile",
-			"JWT_SIGNING_CERT_FILE":  "JWTSigningCertFile",
+			"JWT_SIGNING_KEY_NAME":   "JWTSigningKeyName",
+			"JWT_SIGNING_CERT_NAME":  "JWTSigningCertName",
+			"MONGO_URI":              "MongoURI",
+			"MONGO_DB":               "MongoDB",
+			"MONGO_APPS_COLL":        "MongoAppsColl",
+			"MONGO_USERS_COLL":       "MongoUsersColl",
+			"MONGO_CERT_COLL":        "MongoCertColl",
+			"ENCRYPTION_KEY":         "EncryptionKey",
 		},
 	}
-}
-
-// CreateDirectories creates necessary directories
-func CreateDirectories(config *models.Config) {
-	IOMutex.Lock()
-	defer IOMutex.Unlock()
-
-	os.MkdirAll(config.CertDir, 0755)
-	os.MkdirAll(filepath.Dir(config.CAKeyFile), 0755)
-	os.MkdirAll(filepath.Dir(config.ConfigFile), 0755)
-}
-
-// LoadAppConfigs loads app configuration from disk
-func LoadAppConfigs(config *models.Config) (models.AppConfigs, error) {
-	ConfigMutex.Lock()
-	defer ConfigMutex.Unlock()
-
-	IOMutex.Lock()
-	file, err := os.ReadFile(config.ConfigFile)
-	IOMutex.Unlock()
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	var configs models.AppConfigs
-	if err := json.Unmarshal(file, &configs); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal app configs: %w", err)
-	}
-
-	return configs, nil
-}
-
-// SaveAppConfigs saves app configuration to disk
-func SaveAppConfigs(config *models.Config, appConfigs models.AppConfigs) error {
-	ConfigMutex.Lock()
-	configCopy := make(models.AppConfigs)
-	maps.Copy(configCopy, appConfigs)
-	ConfigMutex.Unlock()
-
-	data, err := json.MarshalIndent(configCopy, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal app configs: %w", err)
-	}
-
-	IOMutex.Lock()
-	defer IOMutex.Unlock()
-
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(filepath.Dir(config.ConfigFile), 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	// Write to a temporary file first for atomic update
-	tempFile := config.ConfigFile + ".tmp"
-	if err := os.WriteFile(tempFile, data, 0644); err != nil {
-		return fmt.Errorf("failed to write temp config file: %w", err)
-	}
-
-	// Rename for atomic replacement
-	if err := os.Rename(tempFile, config.ConfigFile); err != nil {
-		return fmt.Errorf("failed to rename temp config file: %w", err)
-	}
-
-	return nil
 }

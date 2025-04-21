@@ -64,8 +64,8 @@ func (s *Server) validateAdminAuth() gin.HandlerFunc {
 				return
 			}
 
-			admin := s.getAdminById(adminId)
-			if admin == nil {
+			admin, err := s.userRepository.GetByID(c.Request.Context(), adminId)
+			if err != nil || admin == nil {
 				log.Println("admin ID is not valid")
 				c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized"})
 				c.Abort()
