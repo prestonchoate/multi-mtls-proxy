@@ -49,21 +49,19 @@ func (c *Config) GetEncryptionKey() ([]byte, error) {
 type AppConfig struct {
 	ID          primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
 	AppID       string             `json:"appId" bson:"appId"`
-	TargetURLs  map[string]string  `json:"targetUrls" json:"targetUrls"` // path prefix -> target URL
-	ClientCerts ClientCertInfo     `json:"clientCerts" json:"clientCerts"`
-	Owner       uuid.UUID          `json:"owner" json:"owner"`
-	CreatedAt   time.Time          `json:"createdAt" json:"createdAt"`
-	UpdatedAt   time.Time          `json:"updatedAt" json:"updatedAt"`
+	TargetURLs  map[string]string  `json:"targetUrls" bson:"targetUrls"` // path prefix -> target URL
+	ClientCerts ClientCertInfo     `json:"clientCerts" bson:"clientCerts"`
+	Owner       uuid.UUID          `json:"owner" bson:"owner"`
+	CreatedAt   time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt   time.Time          `json:"updatedAt" bson:"updatedAt"`
 }
 
 // ClientCertInfo holds information about the client certificate
 type ClientCertInfo struct {
-	CertFile        string    `json:"certFile"`
-	KeyFile         string    `json:"keyFile"`
-	CertPEM         string    `json:"certPEM,omitempty"`
-	EncryptedKeyPEM string    `json:"encryptedKeyPEM,omitempty"`
-	Fingerprint     string    `json:"fingerprint"`
-	ExpiresAt       time.Time `json:"expiresAt"`
+	CertFile    string    `json:"certFile" bson:"certFile"`
+	KeyFile     string    `json:"keyFile" bson:"keyFile"`
+	Fingerprint string    `json:"fingerprint" bson:"fingerprint"`
+	ExpiresAt   time.Time `json:"expiresAt" bson:"expiresAt"`
 }
 
 type AdminUser struct {

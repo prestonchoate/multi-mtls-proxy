@@ -88,13 +88,25 @@ func (r *MongoAppRepository) GetByID(ctx context.Context, appID string) (*models
 
 // Create adds a new app config
 func (r *MongoAppRepository) Create(ctx context.Context, app models.AppConfig) error {
-	_, err := r.collection.InsertOne(ctx, app)
+	now := time.Now()
+	a := models.AppConfig{
+		ID:          app.ID,
+		AppID:       app.AppID,
+		TargetURLs:  app.TargetURLs,
+		ClientCerts: app.ClientCerts,
+		Owner:       app.Owner,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	_, err := r.collection.InsertOne(ctx, a)
 	return err
 }
 
 // Update modifies an existing app config
 func (r *MongoAppRepository) Update(ctx context.Context, app models.AppConfig) error {
 	filter := bson.M{"appId": app.AppID}
+	app.UpdatedAt = time.Now()
 	update := bson.M{"$set": app}
 	_, err := r.collection.UpdateOne(ctx, filter, update)
 	return err

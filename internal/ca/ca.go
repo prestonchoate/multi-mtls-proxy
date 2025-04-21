@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -214,7 +213,7 @@ func (ca *CertificateAuthority) GenerateClientCertificate(appID string, cfg *mod
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
 	})
-	keyName := filepath.Join(cfg.CertDir, fmt.Sprintf("%s.key", appID))
+	keyName := fmt.Sprintf("%s.key", appID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -229,7 +228,7 @@ func (ca *CertificateAuthority) GenerateClientCertificate(appID string, cfg *mod
 		Type:  "CERTIFICATE",
 		Bytes: certBytes,
 	})
-	certName := filepath.Join(cfg.CertDir, fmt.Sprintf("%s.crt", appID))
+	certName := fmt.Sprintf("%s.crt", appID)
 
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

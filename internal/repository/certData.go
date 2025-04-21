@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/prestonchoate/mtlsProxy/internal/cryptohelper"
@@ -29,6 +30,11 @@ type MongoCertificateRepository struct {
 }
 
 func NewMongoCertificateRepository(client *db.MongoClient, collectionName string, encryptionKey string) *MongoCertificateRepository {
+	keyBytes := []byte(encryptionKey)
+	if !cryptohelper.ValidateKey(keyBytes) {
+		log.Fatalf("Encryption key must be 16, 24, or 32 bytes, got %d", len(keyBytes))
+	}
+
 	return &MongoCertificateRepository{
 		client:         client,
 		collectionName: collectionName,
@@ -62,18 +68,26 @@ func (r *MongoCertificateRepository) writeRecord(ctx context.Context, name strin
 		return fmt.Errorf("collection name: \"%s\" invalid", r.collectionName)
 	}
 
+	now := time.Now()
+
 	certDataRecord := models.CertData{
 		Name:      name,
 		Type:      recordType,
 		Data:      string(data),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		UpdatedAt: now,
+	}
+
+	update := bson.M{
+		"$set": certDataRecord,
+		"$setOnInsert": bson.M{
+			"createdAt": now,
+		},
 	}
 
 	coll := r.client.Database.Collection(r.collectionName)
 	filter := bson.M{"name": certDataRecord.Name, "type": recordType}
-	opts := options.Replace().SetUpsert(true)
-	_, err := coll.ReplaceOne(ctx, filter, certDataRecord, opts)
+	opts := options.Update()
+	_, err := coll.UpdateOne(ctx, filter, update, opts)
 
 	return err
 }

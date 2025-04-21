@@ -19,6 +19,12 @@ func main() {
 		log.Fatalf("Failed to initialize db connection: %v", err)
 	}
 
+	defer func() {
+		if err := mongoClient.Close(); err != nil {
+			log.Printf("Error disconnecting from DB: %v", err)
+		}
+	}()
+
 	appRepo := repository.NewMongoAppRepository(mongoClient, cfg.MongoAppsColl)
 
 	// Initialize certificate authority
@@ -33,7 +39,7 @@ func main() {
 	}
 
 	// Initialize proxy server
-	proxyServer := proxy.New(cfg, appRepo, *certAuth)
+	proxyServer := proxy.New(cfg, appRepo, certAuth)
 
 	// Start proxy server
 	proxyServer.Start()

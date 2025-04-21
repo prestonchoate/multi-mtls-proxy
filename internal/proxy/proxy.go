@@ -21,11 +21,15 @@ type Server struct {
 	config        *models.Config
 	appConfigs    models.AppConfigs
 	appRepo       repository.AppRepository
-	certAuthority ca.CertificateAuthority
+	certAuthority *ca.CertificateAuthority
 }
 
 // New creates a new proxy server
-func New(cfg *models.Config, appRepo repository.AppRepository, certAuthority ca.CertificateAuthority) *Server {
+func New(cfg *models.Config, appRepo repository.AppRepository, certAuthority *ca.CertificateAuthority) *Server {
+	if certAuthority == nil {
+		log.Fatalf("Nil CA pointer in initialization of Proxy server")
+	}
+
 	s := &Server{
 		config:        cfg,
 		certAuthority: certAuthority,

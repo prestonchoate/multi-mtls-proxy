@@ -19,6 +19,12 @@ func main() {
 		log.Fatalf("Failed to connect to db: %v", err)
 	}
 
+	defer func() {
+		if err := client.Close(); err != nil {
+			log.Printf("Error disconnecting from DB: %v", err)
+		}
+	}()
+
 	// Initialize certificate authority
 	certAuth := ca.New()
 	if err := certAuth.Initialize(cfg, client); err != nil {

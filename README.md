@@ -70,11 +70,12 @@ Both the admin API and proxy can be configured using environment variables:
 - `MONGO_APPS_COLL`: MongoDB collection for apps (default: `apps`)
 - `MONGO_USERS_COLL`: MongoDB collection for users (default: `users`)
 - `MONGO_CERT_COLL`: MongoDB collection for certificates (default: `certs`)
-- `ENCRYPTION_KEY`: Encryption key for sensitive data (default: `rTdRG79RqfXnHVIrPui3d4qW7qaF/uVQj5VnkWb96KQ=`)
+- `ENCRYPTION_KEY`: 32-byte Base64 encoded encryption key for sensitive data (default: `rTdRG79RqfXnHVIrPui3d4qW7qaF/uVQj5VnkWb96KQ=`)
 
 The repository provides a `.env.dist` with these default values. It is not required to copy this into a `.env` file, but if you choose to change any configs you may do so with that method. 
 
 **WARNING**: The default credentials are not secure. Always change `DEFAULT_ADMIN_USER` and `DEFAULT_ADMIN_PASSWORD` in production deployments!
+**WARNING**: The default encryption key is not secure. Always change `ENCRYPTION_KEY` in production deployments to prevent unauthorized access to sensitive data!
 
 
 ## Usage

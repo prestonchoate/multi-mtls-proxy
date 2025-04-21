@@ -54,20 +54,25 @@ func (r *MongoUserRepository) GetByUsername(ctx context.Context, username string
 
 // Create adds a new user
 func (r *MongoUserRepository) Create(ctx context.Context, user models.AdminUser) error {
-	// Make sure we have created/updated timestamps
+	// Enforce CreatedAt and UpdatedAt during record creation and immutable ID values
 	now := time.Now()
-	if user.CreatedAt.IsZero() {
-		user.CreatedAt = now
+	u := models.AdminUser{
+		ID:           user.ID,
+		UserName:     user.UserName,
+		PasswordHash: user.PasswordHash,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+		LastLogin:    user.LastLogin,
 	}
-	user.UpdatedAt = now
 
-	_, err := r.collection.InsertOne(ctx, user)
+	_, err := r.collection.InsertOne(ctx, u)
 	return err
 }
 
 // Update modifies an existing admin user
 func (r *MongoUserRepository) Update(ctx context.Context, user models.AdminUser) error {
 	filter := bson.M{"id": user.ID}
+	user.UpdatedAt = time.Now()
 	update := bson.M{"$set": user}
 	_, err := r.collection.UpdateOne(ctx, filter, update)
 	return err

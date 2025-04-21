@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,7 +31,6 @@ type Server struct {
 	config         *models.Config
 	appRepository  repository.AppRepository
 	userRepository repository.UserRepository
-	mongoClient    *db.MongoClient
 	ca             *ca.CertificateAuthority
 }
 
@@ -131,8 +132,8 @@ func (s *Server) createApp(c *gin.Context) {
 		return
 	}
 
-	if appRequest.AppID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "AppID is required"})
+	if appRequest.AppID == "" || strings.Contains(appRequest.AppID, "/") || strings.Contains(appRequest.AppID, "\\") || strings.Contains(appRequest.AppID, "..") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "AppID is required or contains invalid data"})
 		return
 	}
 
@@ -212,6 +213,11 @@ func (s *Server) getApp(c *gin.Context) {
 	adminUser := s.extractAdminFromContext(c)
 	appID := c.Param("appId")
 
+	if strings.Contains(appID, "/") || strings.Contains(appID, "\\") || strings.Contains(appID, "..") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "AppId is invalid"})
+		return
+	}
+
 	app, err := s.appRepository.GetByID(ctx, appID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to retrieve app config: %v", err))
@@ -231,6 +237,11 @@ func (s *Server) updateAppTargets(c *gin.Context) {
 	ctx := c.Request.Context()
 	adminUser := s.extractAdminFromContext(c)
 	appID := c.Param("appId")
+
+	if strings.Contains(appID, "/") || strings.Contains(appID, "\\") || strings.Contains(appID, "..") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "AppId is invalid"})
+		return
+	}
 
 	var targetRequest struct {
 		TargetURLs map[string]string `json:"targetUrls"`
@@ -283,6 +294,11 @@ func (s *Server) rotateAppCert(c *gin.Context) {
 	adminUser := s.extractAdminFromContext(c)
 	appID := c.Param("appId")
 
+	if strings.Contains(appID, "/") || strings.Contains(appID, "\\") || strings.Contains(appID, "..") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "AppId is invalid"})
+		return
+	}
+
 	app, err := s.appRepository.GetByID(ctx, appID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("Failed to retrieve app config: %v", err)})
@@ -327,6 +343,11 @@ func (s *Server) deleteApp(c *gin.Context) {
 	ctx := c.Request.Context()
 	adminUser := s.extractAdminFromContext(c)
 	appID := c.Param("appId")
+
+	if strings.Contains(appID, "/") || strings.Contains(appID, "\\") || strings.Contains(appID, "..") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "AppId is invalid"})
+		return
+	}
 
 	app, err := s.appRepository.GetByID(ctx, appID)
 	if err != nil {
@@ -384,6 +405,12 @@ func (s *Server) createAdminUser(c *gin.Context) {
 
 	if adminCreateRequest.UserName == "" || adminCreateRequest.Password == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Username and Password are required"})
+		return
+	}
+
+	userNameValid := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(adminCreateRequest.UserName)
+	if !userNameValid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Request"})
 		return
 	}
 

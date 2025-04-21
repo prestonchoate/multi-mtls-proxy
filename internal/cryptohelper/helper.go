@@ -6,10 +6,15 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 )
 
 func Encrypt(plainText, key []byte) (string, error) {
+	if !ValidateKey(key) {
+		return "", fmt.Errorf("encryption key must be 16, 24, or 32 bytes long")
+	}
+
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
@@ -30,6 +35,10 @@ func Encrypt(plainText, key []byte) (string, error) {
 }
 
 func Decrypt(encoded string, key []byte) ([]byte, error) {
+	if !ValidateKey(key) {
+		return nil, fmt.Errorf("encryption key must be 16, 24, or 32 bytes long")
+	}
+
 	data, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		return nil, err
@@ -53,4 +62,8 @@ func Decrypt(encoded string, key []byte) ([]byte, error) {
 	ciphertext := data[gcm.NonceSize():]
 
 	return gcm.Open(nil, nonce, ciphertext, nil)
+}
+
+func ValidateKey(key []byte) bool {
+	return len(key) != 16 || len(key) != 24 || len(key) != 32
 }
