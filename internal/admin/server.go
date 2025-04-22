@@ -510,6 +510,10 @@ func (s *Server) generateAdminJwt(user *models.AdminUser) (string, error) {
 
 // Retrieve Signing Cert as RSA PublicKey
 func (s *Server) getSigningCert() (*rsa.PublicKey, error) {
+	if s.config.JWTSigningCertName == "" {
+		return nil, fmt.Errorf("no signing cert name in config")
+	}
+
 	val, err := s.ca.GetCert(s.config.JWTSigningCertName)
 	if err != nil {
 		log.Println("failed to retrieve signing cert: ", err)
@@ -538,6 +542,9 @@ func (s *Server) getSigningCert() (*rsa.PublicKey, error) {
 
 // Retrieve Signing Key as RSA PrivateKey
 func (s *Server) getSigningKey() (*rsa.PrivateKey, error) {
+	if s.config.JWTSigningKeyName == "" {
+		return nil, fmt.Errorf("no signing key name in config")
+	}
 	val, err := s.ca.GetKey(s.config.JWTSigningKeyName)
 	if err != nil {
 		log.Println("failed to retrieve signing key: ", err)

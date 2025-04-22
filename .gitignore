@@ -20,6 +20,8 @@
 !LICENSE
 !.env.dist
 
+!*.Dockerfile
+
 #!.goreleaser.yaml
 #!.github/*
 #!.github/**

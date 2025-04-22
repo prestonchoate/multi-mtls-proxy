@@ -86,7 +86,8 @@ func (r *MongoCertificateRepository) writeRecord(ctx context.Context, name strin
 
 	coll := r.client.Database.Collection(r.collectionName)
 	filter := bson.M{"name": certDataRecord.Name, "type": recordType}
-	opts := options.Update()
+	opts := options.Update().SetUpsert(true)
+	log.Printf("Attempting to write record: %v of type %v to collection: %v in DB %v\n", name, recordType, coll.Name(), r.client.Database.Name())
 	_, err := coll.UpdateOne(ctx, filter, update, opts)
 
 	return err
@@ -105,6 +106,8 @@ func (r *MongoCertificateRepository) GetKey(ctx context.Context, name string) ([
 // getRecord holds the logic to retrieve any cert or key from the DB
 func (r *MongoCertificateRepository) getRecord(ctx context.Context, name string, recordType models.CertDataType) ([]byte, error) {
 	coll := r.client.Database.Collection(r.collectionName)
+	log.Printf("Attempting to retrieve key: %v from collection: %v in DB: %v\n", name, coll.Name(), r.client.Database.Name())
+
 	filter := bson.M{"name": name, "type": recordType}
 	var certRecord models.CertData
 	err := coll.FindOne(ctx, filter).Decode(&certRecord)

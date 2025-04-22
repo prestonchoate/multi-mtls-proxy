@@ -88,6 +88,6 @@ type CertData struct {
 	Name      string             `json:"name" bson:"name"`
 	Type      CertDataType       `json:"type" bson:"type"`
 	Data      string             `json:"data" bson:"data"`
-	CreatedAt time.Time          `json:"createdAt" bson:"createdAt"`
+	CreatedAt time.Time          `json:"createdAt" bson:"-"`
 	UpdatedAt time.Time          `json:"updatedAt" bson:"updatedAt"`
 }
