@@ -709,11 +709,7 @@ func (s *Server) publishAppConfigChange(appID string, operation string) {
 		return
 	}
 
-	payload := struct {
-		AppId     string    `json:"appId"`
-		Operation string    `json:"operation"`
-		Timestamp time.Time `json:"timestamp"`
-	}{
+	payload := models.AppConfigEventData{
 		AppId:     appID,
 		Operation: operation,
 		Timestamp: time.Now(),

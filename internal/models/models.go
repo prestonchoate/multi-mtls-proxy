@@ -93,3 +93,9 @@ type CertData struct {
 	CreatedAt time.Time          `json:"createdAt" bson:"-"`
 	UpdatedAt time.Time          `json:"updatedAt" bson:"updatedAt"`
 }
+
+type AppConfigEventData struct {
+	AppId     string    `json:"appId"`
+	Operation string    `json:"operation"`
+	Timestamp time.Time `json:"timestamp"`
+}
