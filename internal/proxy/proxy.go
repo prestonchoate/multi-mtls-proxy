@@ -4,13 +4,16 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sync"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/prestonchoate/mtlsProxy/internal/ca"
 	"github.com/prestonchoate/mtlsProxy/internal/models"
 	"github.com/prestonchoate/mtlsProxy/internal/repository"
@@ -18,10 +21,12 @@ import (
 
 // Server represents the proxy server
 type Server struct {
-	config        *models.Config
-	appConfigs    models.AppConfigs
-	appRepo       repository.AppRepository
-	certAuthority *ca.CertificateAuthority
+	config         *models.Config
+	appConfigs     models.AppConfigs
+	appRepo        repository.AppRepository
+	certAuthority  *ca.CertificateAuthority
+	natsClient     *nats.Conn
+	appConfigMutex sync.RWMutex
 }
 
 // New creates a new proxy server
@@ -30,10 +35,19 @@ func New(cfg *models.Config, appRepo repository.AppRepository, certAuthority *ca
 		log.Fatalf("Nil CA pointer in initialization of Proxy server")
 	}
 
+	nc, ncErr := nats.Connect(cfg.NatsURL)
+	if ncErr != nil {
+		log.Printf("Failed to connect to NATS at %s: %v\n", cfg.NatsURL, ncErr)
+		return nil
+	}
+	log.Println("Connected to NATS at ", cfg.NatsURL)
+
 	s := &Server{
-		config:        cfg,
-		certAuthority: certAuthority,
-		appRepo:       appRepo,
+		config:         cfg,
+		certAuthority:  certAuthority,
+		appRepo:        appRepo,
+		natsClient:     nc,
+		appConfigMutex: sync.RWMutex{},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -74,6 +88,10 @@ func (s *Server) Start() {
 		Handler:   http.HandlerFunc(s.proxyHandler),
 	}
 
+	// Listen for NATS messages
+	defer s.natsClient.Close()
+	go s.subscribeToConfigChanges()
+
 	// Start the server
 	log.Printf("Starting proxy server on port %d", s.config.ProxyPort)
 	cert, certErr := s.certAuthority.GetCert(s.config.ProxyServerCertName)
@@ -104,8 +122,10 @@ func (s *Server) proxyHandler(w http.ResponseWriter, r *http.Request) {
 	clientCert := r.TLS.PeerCertificates[0]
 	clientAppID := clientCert.Subject.CommonName
 
+	s.appConfigMutex.RLock()
 	// Find app config
 	app, exists := s.appConfigs[clientAppID]
+	s.appConfigMutex.RUnlock()
 
 	if !exists {
 		http.Error(w, "Unknown client", http.StatusUnauthorized)
@@ -166,4 +186,55 @@ func (s *Server) proxyHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Forward the request
 	proxy.ServeHTTP(w, r)
+}
+
+// subscribeToConfigChanges adds NATS subscription for app config change messages
+func (s *Server) subscribeToConfigChanges() {
+	topic := s.config.NatsAppConfigTopic
+
+	_, err := s.natsClient.Subscribe(topic, s.handleConfigChangeMessage)
+
+	if err != nil {
+		log.Fatalf("Failed to subscribe to topic %s: %v\n", topic, err)
+	}
+
+	log.Printf("Subscribed to NATS topic: %s\n", topic)
+}
+
+// handleConfigChangeMessage deals with the various operation types and reloads/changes local app config cache accordingly
+func (s *Server) handleConfigChangeMessage(msg *nats.Msg) {
+	log.Printf("Received NATS message: %s\n", string(msg.Data))
+
+	var payload models.AppConfigEventData
+
+	if err := json.Unmarshal(msg.Data, &payload); err != nil {
+		log.Printf("Failed to unmarshal NATS message: %v\n", err)
+		return
+	}
+
+	if payload.Operation == "created" || payload.Operation == "updated" || payload.Operation == "rotated" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		newConfigs, err := s.appRepo.GetFullCollection(ctx)
+		if err != nil {
+			log.Printf("Failed to retrieve app configs: %v", err)
+			return
+		}
+		s.appConfigMutex.Lock()
+		defer s.appConfigMutex.Unlock()
+		s.appConfigs = newConfigs
+		log.Println("Updated app configs")
+		return
+	}
+
+	if payload.Operation == "deleted" {
+		s.appConfigMutex.Lock()
+		defer s.appConfigMutex.Unlock()
+		delete(s.appConfigs, payload.AppId)
+		log.Printf("Deleted app config for %s\n", payload.AppId)
+		return
+	}
+
+	log.Printf("Unknown operation '%s' for app %s\n", payload.Operation, payload.AppId)
 }

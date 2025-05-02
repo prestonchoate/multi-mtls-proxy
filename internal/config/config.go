@@ -93,6 +93,8 @@ func GetConfig() *models.Config {
 		MongoUsersColl:       checkEnvVar[string]("MONGO_USERS_COLL", defaults),
 		EncryptionKey:        checkEnvVar[string]("ENCRYPTION_KEY", defaults),
 		MongoCertColl:        checkEnvVar[string]("MONGO_CERT_COLL", defaults),
+		NatsURL:              checkEnvVar[string]("NATS_URL", defaults),
+		NatsAppConfigTopic:   checkEnvVar[string]("NATS_APP_CONFIG_TOPIC", defaults),
 	}
 
 	return configInstance
@@ -118,6 +120,8 @@ func getDefaultConfig() models.Config {
 		MongoAppsColl:        "apps",
 		MongoUsersColl:       "users",
 		MongoCertColl:        "certs",
+		NatsURL:              "nats://localhost:4222",
+		NatsAppConfigTopic:   "appConfigChanged",
 		EncryptionKey:        "rTdRG79RqfXnHVIrPui3d4qW7qaF/uVQj5VnkWb96KQ=",
 		Mapping: map[string]string{
 			"ADMIN_API_PORT":         "AdminAPIPort",
@@ -138,6 +142,8 @@ func getDefaultConfig() models.Config {
 			"MONGO_USERS_COLL":       "MongoUsersColl",
 			"MONGO_CERT_COLL":        "MongoCertColl",
 			"ENCRYPTION_KEY":         "EncryptionKey",
+			"NATS_URL":               "NatsURL",
+			"NATS_APP_CONFIG_TOPIC":  "NatsAppConfigTopic",
 		},
 	}
 }

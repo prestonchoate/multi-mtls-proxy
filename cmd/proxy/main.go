@@ -41,6 +41,10 @@ func main() {
 	// Initialize proxy server
 	proxyServer := proxy.New(cfg, appRepo, certAuth)
 
+	if proxyServer == nil {
+		log.Fatalf("Failed to start proxy server")
+	}
+
 	// Start proxy server
 	proxyServer.Start()
 }

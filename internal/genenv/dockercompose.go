@@ -47,6 +47,7 @@ services:
       - MONGO_URI=mongodb://mongo:27017
       - MONGO_DB=mtlsAdmin
       - HOSTNAME=mtls.localhost
+      - NATS_URL=nats://nats:4222
     restart: unless-stopped
 
   admin-api:
@@ -62,6 +63,7 @@ services:
       - MONGO_URI=mongodb://mongo:27017
       - MONGO_DB=mtlsAdmin
       - HOSTNAME=admin.localhost
+      - NATS_URL=nats://nats:4222
     restart: unless-stopped
 
   mongo:
@@ -69,6 +71,15 @@ services:
     container_name: mongo
     volumes:
       - mongo-data:/data/db
+    restart: unless-stopped
+
+  nats:
+    image: nats:latest
+    container_name: nats
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: ["--http_port", "8222"]
     restart: unless-stopped
 
 volumes:

@@ -28,6 +28,8 @@ type Config struct {
 	MongoUsersColl       string            `json:"mongoUsersColl"`
 	MongoCertColl        string            `json:"mongoCertColl"`
 	EncryptionKey        string            `json:"encryptionKey"`
+	NatsURL              string            `json:"natsUrl"`
+	NatsAppConfigTopic   string            `json:"natsAppConfigTopic"`
 	Mapping              map[string]string `json:"-"`
 }
 
@@ -90,4 +92,10 @@ type CertData struct {
 	Data      string             `json:"data" bson:"data"`
 	CreatedAt time.Time          `json:"createdAt" bson:"-"`
 	UpdatedAt time.Time          `json:"updatedAt" bson:"updatedAt"`
+}
+
+type AppConfigEventData struct {
+	AppId     string    `json:"appId"`
+	Operation string    `json:"operation"`
+	Timestamp time.Time `json:"timestamp"`
 }
