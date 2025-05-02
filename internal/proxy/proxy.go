@@ -188,49 +188,53 @@ func (s *Server) proxyHandler(w http.ResponseWriter, r *http.Request) {
 	proxy.ServeHTTP(w, r)
 }
 
+// subscribeToConfigChanges adds NATS subscription for app config change messages
 func (s *Server) subscribeToConfigChanges() {
 	topic := s.config.NatsAppConfigTopic
 
-	_, err := s.natsClient.Subscribe(topic, func(msg *nats.Msg) {
-		log.Printf("Received NATS message: %s\n", string(msg.Data))
-
-		var payload models.AppConfigEventData
-
-		if err := json.Unmarshal(msg.Data, &payload); err != nil {
-			log.Printf("Failed to unmarshal NATS message: %v\n", err)
-			return
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		s.appConfigMutex.Lock()
-		defer s.appConfigMutex.Unlock()
-
-		switch payload.Operation {
-		case "created", "updated", "rotated":
-			newConfigs, err := s.appRepo.GetFullCollection(ctx)
-			if err != nil {
-				log.Printf("Failed to retrieve app configs: %v", err)
-				return
-			}
-			s.appConfigs = newConfigs
-			log.Println("Updated app configs")
-			break
-
-		case "deleted":
-			delete(s.appConfigs, payload.AppId)
-			log.Printf("Deleted app config for %s\n", payload.AppId)
-			break
-
-		default:
-			log.Printf("Unknown operation '%s' for app %s\n", payload.Operation, payload.AppId)
-		}
-	})
+	_, err := s.natsClient.Subscribe(topic, s.handleConfigChangeMessage)
 
 	if err != nil {
 		log.Fatalf("Failed to subscribe to topic %s: %v\n", topic, err)
 	}
 
 	log.Printf("Subscribed to NATS topic: %s\n", topic)
+}
+
+// handleConfigChangeMessage deals with the various operation types and reloads/changes local app config cache accordingly
+func (s *Server) handleConfigChangeMessage(msg *nats.Msg) {
+	log.Printf("Received NATS message: %s\n", string(msg.Data))
+
+	var payload models.AppConfigEventData
+
+	if err := json.Unmarshal(msg.Data, &payload); err != nil {
+		log.Printf("Failed to unmarshal NATS message: %v\n", err)
+		return
+	}
+
+	if payload.Operation == "created" || payload.Operation == "updated" || payload.Operation == "rotated" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		newConfigs, err := s.appRepo.GetFullCollection(ctx)
+		if err != nil {
+			log.Printf("Failed to retrieve app configs: %v", err)
+			return
+		}
+		s.appConfigMutex.Lock()
+		defer s.appConfigMutex.Unlock()
+		s.appConfigs = newConfigs
+		log.Println("Updated app configs")
+		return
+	}
+
+	if payload.Operation == "deleted" {
+		s.appConfigMutex.Lock()
+		defer s.appConfigMutex.Unlock()
+		delete(s.appConfigs, payload.AppId)
+		log.Printf("Deleted app config for %s\n", payload.AppId)
+		return
+	}
+
+	log.Printf("Unknown operation '%s' for app %s\n", payload.Operation, payload.AppId)
 }
