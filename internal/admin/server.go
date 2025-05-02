@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"log"
@@ -19,6 +20,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/nats-io/nats.go"
 	"github.com/prestonchoate/mtlsProxy/internal/ca"
 	"github.com/prestonchoate/mtlsProxy/internal/db"
 	"github.com/prestonchoate/mtlsProxy/internal/models"
@@ -32,6 +34,7 @@ type Server struct {
 	appRepository  repository.AppRepository
 	userRepository repository.UserRepository
 	ca             *ca.CertificateAuthority
+	natsClient     *nats.Conn
 }
 
 // New creates a new admin server
@@ -39,6 +42,16 @@ func New(cfg *models.Config, certAuth *ca.CertificateAuthority) (*Server, error)
 	mongoClient, err := db.NewMongoClient(cfg.MongoURI, cfg.MongoDB)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to MongoDB: %w", err)
+	}
+
+	if cfg.NatsURL == "" {
+		return nil, fmt.Errorf("no NATS configuration available")
+	}
+
+	nc, ncErr := nats.Connect(cfg.NatsURL)
+	if ncErr != nil {
+		log.Printf("Failed to connect to NATS at %s: %v\n", cfg.NatsURL, ncErr)
+		return nil, fmt.Errorf("NATS connection failed: %v", ncErr)
 	}
 
 	appRepo := repository.NewMongoAppRepository(mongoClient, cfg.MongoAppsColl)
@@ -51,11 +64,17 @@ func New(cfg *models.Config, certAuth *ca.CertificateAuthority) (*Server, error)
 		ca:             certAuth,
 		appRepository:  appRepo,
 		userRepository: userRepo,
+		natsClient:     nc,
 	}, nil
 }
 
 // Start starts the admin API server
 func (s *Server) Start() {
+	// Ensure NATS connection is closed when server stops
+	if s.natsClient != nil {
+		defer s.natsClient.Close()
+	}
+
 	existingAdmin, _ := s.userRepository.GetByUsername(context.Background(), s.config.DefaultAdminUser)
 	if existingAdmin == nil {
 		log.Println("Creating default admin user")
@@ -180,6 +199,9 @@ func (s *Server) createApp(c *gin.Context) {
 		return
 	}
 
+	// Publish message for successful creation
+	s.publishAppConfigChange(newApp.AppID, "created")
+
 	// Return client certificate information
 	c.JSON(http.StatusCreated, gin.H{
 		"appId": newApp.AppID,
@@ -285,6 +307,9 @@ func (s *Server) updateAppTargets(c *gin.Context) {
 		return
 	}
 
+	// Publish message for successful creation
+	s.publishAppConfigChange(app.AppID, "updated")
+
 	c.JSON(http.StatusOK, app)
 }
 
@@ -326,6 +351,9 @@ func (s *Server) rotateAppCert(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save app config: %v", err)})
 		return
 	}
+
+	// Publish message for successful creation
+	s.publishAppConfigChange(app.AppID, "rotated")
 
 	c.JSON(http.StatusOK, gin.H{
 		"appId": appID,
@@ -374,6 +402,9 @@ func (s *Server) deleteApp(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Something went wrong"})
 		return
 	}
+
+	// Publish message for successful creation
+	s.publishAppConfigChange(app.AppID, "deleted")
 
 	c.JSON(http.StatusOK, gin.H{"message": "App deleted successfully"})
 }
@@ -669,4 +700,36 @@ func (s *Server) addFileToZip(zipWriter *zip.Writer, filePath string, fileType m
 
 	_, err = writer.Write(file)
 	return err
+}
+
+// publishAppConfigChange sends a message to NATS about an App Config change
+func (s *Server) publishAppConfigChange(appID string, operation string) {
+	if s.natsClient == nil || !s.natsClient.IsConnected() {
+		log.Println("NATS client not connected or available. Cannot publish message")
+		return
+	}
+
+	payload := struct {
+		AppId     string    `json:"appId"`
+		Operation string    `json:"operation"`
+		Timestamp time.Time `json:"timestamp"`
+	}{
+		AppId:     appID,
+		Operation: operation,
+		Timestamp: time.Now(),
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Failed to marshal NATS message payload for app %s: %v\n", appID, err)
+		return
+	}
+
+	err = s.natsClient.Publish(s.config.NatsAppConfigTopic, data)
+	if err != nil {
+		log.Printf("Failed to publish NATS message for app %s (Operation %s) on topic %s: %v\n", appID, operation, s.config.NatsAppConfigTopic, err)
+		return
+	} else {
+		log.Printf("Published NATS message for app %s (operation %s) on topic %s\n", appID, operation, s.config.NatsAppConfigTopic)
+	}
 }

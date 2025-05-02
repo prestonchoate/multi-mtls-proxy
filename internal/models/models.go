@@ -28,6 +28,8 @@ type Config struct {
 	MongoUsersColl       string            `json:"mongoUsersColl"`
 	MongoCertColl        string            `json:"mongoCertColl"`
 	EncryptionKey        string            `json:"encryptionKey"`
+	NatsURL              string            `json:"natsUrl"`
+	NatsAppConfigTopic   string            `json:"natsAppConfigTopic"`
 	Mapping              map[string]string `json:"-"`
 }
 
